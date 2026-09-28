@@ -6,11 +6,11 @@
  *                        profit figure and stock movement obeys the same rules as live orders.
  *                        Refuses to run if the database already has orders.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { eq, sql } from "drizzle-orm";
 import { createDb } from "../src/lib/db/client";
 import {
-  categories, collections, customerAddresses, customers, discounts, inventory, inventoryMovements, orders, productVariants, products, reviews, suppliers, users,
+  categories, collections, customerAddresses, customers, discounts, inventory, inventoryMovements, orders, productImages, productVariants, products, reviews, suppliers, users,
 } from "../src/lib/db/schema";
 import { upsertReferenceData } from "../src/lib/db/reference-data";
 import { placeOrder, updateOrderStatus, statusFields } from "../src/lib/orders/service";
@@ -19,6 +19,9 @@ import type { Actor } from "../src/lib/auth/permissions";
 type CatalogProduct = { id: string; slug: string; name: string; cat: string; price: number; cmp?: number; mats: string[]; size: { type: string; opts: string[] } | null; gems: string[]; badge?: string; isBest?: boolean; isNew?: boolean; short: string; desc: string; details: string[]; occ: string[] };
 type Catalog = { materials: Record<string, { name: string; f: number }>; products: CatalogProduct[] };
 const catalog: Catalog = JSON.parse(readFileSync(new URL("./data/catalog.json", import.meta.url), "utf8"));
+/** Product renderings generated from the prototype (public/products/*.svg). Replace with Supabase Storage photos. */
+const IMAGES_URL = new URL("./data/images.json", import.meta.url);
+const images: Record<string, { file: string; material: string; view: string; alt: string }[]> = existsSync(IMAGES_URL) ? JSON.parse(readFileSync(IMAGES_URL, "utf8")) : {};
 const COST_RATIO: Record<string, number> = { yg: 0.44, wg: 0.45, vm: 0.33, ss: 0.29 };
 const COLOR: Record<string, string> = { yg: "Yellow Gold", wg: "White Gold", vm: "Yellow Gold", ss: "Silver" };
 const COLLECTION_OF: Record<string, string> = {
@@ -99,6 +102,13 @@ async function main() {
       await db.insert(inventory).values({ variantId: v!.id, stockQuantity: 0, reorderLevel: p.cat === "rings" ? 3 : 5 });
       newVariants++;
     }
+    const imgs = images[p.slug] ?? [];
+    if (imgs.length) {
+      const firstVariantOf = new Map<string, string>();
+      for (const v of await db.select().from(productVariants).where(eq(productVariants.productId, row.id))) if (!firstVariantOf.has(v.material)) firstVariantOf.set(v.material, v.id);
+      const ordered = [...imgs].sort((a, b) => (a.material === p.mats[0] ? 0 : 1) - (b.material === p.mats[0] ? 0 : 1) || (a.view === "front" ? 0 : 1) - (b.view === "front" ? 0 : 1));
+      await db.insert(productImages).values(ordered.map((im, i) => ({ productId: row.id, variantId: im.view === "front" ? firstVariantOf.get(im.material) ?? null : null, url: `/products/${im.file}`, alt: im.alt, position: i })));
+    }
     const n = 3 + Math.floor(R() * 4);
     await db.insert(reviews).values(Array.from({ length: n }, (_, i) => {
       const [rating, title, body] = REVIEW_POOL[(i + p.name.length) % REVIEW_POOL.length]!;
@@ -172,6 +182,9 @@ async function main() {
       const [c] = await db.select({ id: customers.id }).from(customers).where(eq(customers.email, person.email));
       if (c) await db.insert(customerAddresses).values({ customerId: c.id, type: "shipping", isDefault: true, firstName: person.addr.firstName!, lastName: person.addr.lastName!, line1: person.addr.line1!, city: person.addr.city!, postalCode: person.addr.postalCode!, country: person.addr.country! });
     }
+    // Notifications were written "now" while replaying history: date them to their orders and mark old ones read.
+    await db.execute(sql`update notifications n set created_at = o.placed_at from orders o where n.reference = o.order_number`);
+    await db.execute(sql`update notifications set read_at = now() where created_at < now() - interval '1 day'`);
     console.log(`Demo history: ${placed} orders (${refunded} refunded, ${skipped} skipped as sold out), ${people.length} customers.`);
   }
   await pool.end();

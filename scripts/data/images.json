@@ -1,0 +1,382 @@
+{
+ "aurora-signet-ring": [
+  {
+   "file": "aurora-signet-ring-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Aurora Signet Ring in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "aurora-signet-ring-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Aurora Signet Ring in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "aurora-signet-ring-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Aurora Signet Ring in 14K White Gold, front view"
+  },
+  {
+   "file": "aurora-signet-ring-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Aurora Signet Ring in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "aurora-signet-ring-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Aurora Signet Ring in Sterling Silver, front view"
+  }
+ ],
+ "elan-dome-ring": [
+  {
+   "file": "elan-dome-ring-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Élan Dome Ring in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "elan-dome-ring-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Élan Dome Ring in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "elan-dome-ring-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Élan Dome Ring in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "elan-dome-ring-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Élan Dome Ring in Sterling Silver, front view"
+  }
+ ],
+ "seren-stacking-ring": [
+  {
+   "file": "seren-stacking-ring-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Seren Stacking Ring in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "seren-stacking-ring-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Seren Stacking Ring in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "seren-stacking-ring-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Seren Stacking Ring in 14K White Gold, front view"
+  },
+  {
+   "file": "seren-stacking-ring-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Seren Stacking Ring in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "seren-stacking-ring-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Seren Stacking Ring in Sterling Silver, front view"
+  }
+ ],
+ "vesper-solitaire-ring": [
+  {
+   "file": "vesper-solitaire-ring-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Vesper Solitaire Ring in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "vesper-solitaire-ring-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Vesper Solitaire Ring in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "vesper-solitaire-ring-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Vesper Solitaire Ring in 14K White Gold, front view"
+  }
+ ],
+ "isla-eternity-band": [
+  {
+   "file": "isla-eternity-band-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Isla Eternity Band in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "isla-eternity-band-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Isla Eternity Band in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "isla-eternity-band-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Isla Eternity Band in 14K White Gold, front view"
+  }
+ ],
+ "luna-huggie-hoops": [
+  {
+   "file": "luna-huggie-hoops-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Luna Huggie Hoops in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "luna-huggie-hoops-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Luna Huggie Hoops in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "luna-huggie-hoops-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Luna Huggie Hoops in 14K White Gold, front view"
+  },
+  {
+   "file": "luna-huggie-hoops-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Luna Huggie Hoops in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "luna-huggie-hoops-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Luna Huggie Hoops in Sterling Silver, front view"
+  }
+ ],
+ "mira-pearl-earrings": [
+  {
+   "file": "mira-pearl-earrings-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Mira Pearl Earrings in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "mira-pearl-earrings-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Mira Pearl Earrings in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "mira-pearl-earrings-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Mira Pearl Earrings in 18K Gold Vermeil, front view"
+  }
+ ],
+ "astra-diamond-studs": [
+  {
+   "file": "astra-diamond-studs-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Astra Diamond Studs in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "astra-diamond-studs-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Astra Diamond Studs in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "astra-diamond-studs-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Astra Diamond Studs in 14K White Gold, front view"
+  }
+ ],
+ "halo-statement-hoops": [
+  {
+   "file": "halo-statement-hoops-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Halo Statement Hoops in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "halo-statement-hoops-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Halo Statement Hoops in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "halo-statement-hoops-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Halo Statement Hoops in 18K Gold Vermeil, front view"
+  }
+ ],
+ "soleil-chain-necklace": [
+  {
+   "file": "soleil-chain-necklace-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Soleil Chain Necklace in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "soleil-chain-necklace-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Soleil Chain Necklace in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "soleil-chain-necklace-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Soleil Chain Necklace in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "soleil-chain-necklace-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Soleil Chain Necklace in Sterling Silver, front view"
+  }
+ ],
+ "nova-pendant-necklace": [
+  {
+   "file": "nova-pendant-necklace-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Nova Pendant Necklace in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "nova-pendant-necklace-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Nova Pendant Necklace in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "nova-pendant-necklace-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Nova Pendant Necklace in 14K White Gold, front view"
+  }
+ ],
+ "cleo-initial-necklace": [
+  {
+   "file": "cleo-initial-necklace-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Cléo Initial Necklace in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "cleo-initial-necklace-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Cléo Initial Necklace in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "cleo-initial-necklace-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Cléo Initial Necklace in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "cleo-initial-necklace-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Cléo Initial Necklace in Sterling Silver, front view"
+  }
+ ],
+ "perle-strand-necklace": [
+  {
+   "file": "perle-strand-necklace-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Perle Strand Necklace in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "perle-strand-necklace-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Perle Strand Necklace in 14K Yellow Gold, detail view"
+  }
+ ],
+ "celeste-tennis-bracelet": [
+  {
+   "file": "celeste-tennis-bracelet-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Celeste Tennis Bracelet in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "celeste-tennis-bracelet-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Celeste Tennis Bracelet in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "celeste-tennis-bracelet-wg-front.svg",
+   "material": "wg",
+   "view": "front",
+   "alt": "Celeste Tennis Bracelet in 14K White Gold, front view"
+  }
+ ],
+ "rive-cuff": [
+  {
+   "file": "rive-cuff-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Rive Cuff in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "rive-cuff-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Rive Cuff in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "rive-cuff-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Rive Cuff in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "rive-cuff-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Rive Cuff in Sterling Silver, front view"
+  }
+ ],
+ "linea-chain-bracelet": [
+  {
+   "file": "linea-chain-bracelet-yg-front.svg",
+   "material": "yg",
+   "view": "front",
+   "alt": "Linea Chain Bracelet in 14K Yellow Gold, front view"
+  },
+  {
+   "file": "linea-chain-bracelet-yg-detail.svg",
+   "material": "yg",
+   "view": "detail",
+   "alt": "Linea Chain Bracelet in 14K Yellow Gold, detail view"
+  },
+  {
+   "file": "linea-chain-bracelet-vm-front.svg",
+   "material": "vm",
+   "view": "front",
+   "alt": "Linea Chain Bracelet in 18K Gold Vermeil, front view"
+  },
+  {
+   "file": "linea-chain-bracelet-ss-front.svg",
+   "material": "ss",
+   "view": "front",
+   "alt": "Linea Chain Bracelet in Sterling Silver, front view"
+  }
+ ]
+}

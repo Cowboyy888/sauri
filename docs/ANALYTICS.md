@@ -19,7 +19,7 @@ These are used identically on screen, in exports and in tests.
 | **Average order value** | net revenue ÷ orders |
 | Units sold | Σ quantity on orders that were not refunded |
 | Contribution profit | gross profit − payment fees − carrier costs (reported separately) |
-| Inventory value | Σ stock × current cost price |
+| Inventory value | Σ **available** stock × current cost price (Phase 2 brief §18). Units reserved by unpaid checkouts are excluded until they sell or are released. The on-hand value (stock × cost) is kept as `variant_stock.on_hand_value_cents`. |
 
 Tax collected and shipping charged are pass-through, not revenue.
 
@@ -46,6 +46,14 @@ Each range carries its **previous period**: the same length, ending where the ra
 | `getSeries(range, unit?)` | zero-filled time series: hour for ≤ 1.5 days, day for ≤ 95 days, week for ≤ 400 days, month beyond |
 | `getInventory({ onlyAttention })` | every variant: stock, reserved, available, status, value, sold in the last 7 and 30 days, **forecast** |
 | `getCustomerAnalytics(range)` | new vs returning customers, repeat purchase rate, average lifetime value, average order value, revenue per customer |
+
+## Added in Phase 2
+
+- `getMetrics` also returns shipping charged and tax collected, for the revenue breakdown.
+- `getSeries(range, { unit, productId })` returns COGS per bucket and can be limited to one product.
+- `getCustomerSeries` returns new vs returning customers per bucket, plus the cumulative number of buyers.
+- `getSalesBy(range, by, { categorySlug, productId })` supports category drill-down. Every group row now carries AOV.
+- Admin read models live in `src/lib/admin/*`: paginated products, orders, customers, stock and movements; low and out-of-stock lists; value by category and product; the inventory value trend (an estimate rebuilt from the movement ledger at today's costs); notifications; audit log; global search; reports.
 
 ## Forecast (estimates; label them so in the UI)
 

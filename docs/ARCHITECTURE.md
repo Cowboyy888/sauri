@@ -37,7 +37,7 @@ The storefront and the dashboard call the same functions in `src/lib`. An order 
 | Data access | **Drizzle ORM**, used everywhere | See "Why Drizzle" below |
 | Auth | Supabase Auth (identity) + our `users` table (role) | Supabase verifies who you are. Our table decides what you may do. |
 | Validation | Zod at every route boundary (`.strict()`, so unknown fields are rejected) | A browser cannot send a price or a cost |
-| Styling | Tailwind CSS 4 | shadcn/ui, Lucide and Recharts arrive with the Phase 2 admin UI |
+| Styling / UI | Tailwind CSS 4; shadcn-style components on Radix primitives; Lucide icons; Recharts; IBM Plex Sans (bundled) | The shadcn CLI needs its registry, which was unreachable in the build environment, so the components were written in the same pattern by hand |
 | Payments | Stripe-ready: pending order + reservation, `markOrderPaid` for the webhook | The browser can never mark an order paid |
 | Realtime | `pg_notify('sauri_events', …)` on commit. Supabase Realtime subscriptions in Phase 2. | Dashboards refresh when an order lands |
 | Storage | Supabase Storage URLs in `product_images.url` | Images later; the schema is ready |
@@ -63,7 +63,10 @@ The Supabase JS client is used **only** for authentication (`@supabase/ssr`), ne
 ## Folder map
 
 ```
-src/app/                 pages and route handlers (thin)
+src/app/                 pages and route handlers (thin); admin under src/app/admin/(console)
+src/components/admin     dashboard components (KPICard, SalesChart, DataTable, DateRangePicker, …)
+src/components/ui        shadcn-style primitives on Radix (button, field, card, dialog, menu)
+src/lib/admin            admin read models, reports, range handling, page guard
 src/lib/                 all business logic (server-only)
 src/middleware.ts        coarse sign-in gate + Supabase session refresh for /admin
 drizzle/                 SQL migrations (0000 schema, 0001 views + RLS)

@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // `pg` is a Node-only driver; keep it out of the bundler.
-  serverExternalPackages: ["pg"],
+  serverExternalPackages: ["pg", "exceljs", "jspdf", "jspdf-autotable"],
 };
 
 export default nextConfig;

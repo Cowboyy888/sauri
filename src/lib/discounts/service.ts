@@ -54,3 +54,10 @@ export async function createDiscount(db: Db, actor: Actor, input: NewDiscount) {
     return row;
   });
 }
+
+export async function setDiscountActive(db: Db, actor: Actor, id: string, active: boolean) {
+  assertCan(actor, "discounts:write");
+  const [d] = await db.update(discounts).set({ active }).where(eq(discounts.id, id)).returning();
+  if (!d) throw new ValidationError("Discount not found.");
+  await audit(db, actor, active ? "Activated discount" : "Paused discount", "discount", d.code, { active: !active }, { active });
+}

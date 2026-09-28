@@ -14,14 +14,14 @@ const RW = (...a: Area[]) => a.flatMap((x) => [`${x}:read`, `${x}:write`] as Per
 const RO = (...a: Area[]) => a.map((x) => `${x}:read` as Permission);
 
 export const PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
-  // Everything.
+  // Full access.
   OWNER: new Set(RW(...AREAS)),
-  // Products, orders, customers, inventory, analytics, reports (+ discounts, reviews, content, audit trail).
-  // Not: staff roles or system settings.
-  ADMIN: new Set([...RW("dashboard", "sales", "orders", "customers", "products", "inventory", "discounts", "reports", "reviews", "content"), ...RO("audit")]),
-  // Orders, customers, sales analytics.
+  // Phase 2 brief §46: dashboard, sales, orders, products, inventory, customers, reports.
+  // Discounts, reviews, content, audit log, staff and settings are OWNER-only.
+  ADMIN: new Set(RW("dashboard", "sales", "orders", "products", "inventory", "customers", "reports")),
+  // Dashboard, sales, orders, customers.
   SALES: new Set([...RO("dashboard", "sales"), ...RW("orders", "customers")]),
-  // Products, inventory, stock movements.
+  // Dashboard, products, inventory (incl. stock movements).
   INVENTORY: new Set([...RO("dashboard"), ...RW("products", "inventory")]),
   // Dashboard, read-only.
   VIEWER: new Set(RO("dashboard")),

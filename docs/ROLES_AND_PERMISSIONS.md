@@ -8,30 +8,32 @@
 
 ## Permission matrix
 
-Permissions are `area:read` and `area:write` (`src/lib/auth/permissions.ts`).
+Updated in Phase 2 to brief §46. Permissions are `area:read` and `area:write` (`src/lib/auth/permissions.ts`); the Settings page renders this same matrix from the code.
 
 | Area | OWNER | ADMIN | SALES | INVENTORY | VIEWER |
 |---|---|---|---|---|---|
 | Dashboard | edit | edit | view | view | **view** |
-| Sales analytics | edit | edit | view | – | – |
+| Sales and analytics | edit | edit | view | – | – |
 | Orders | edit | edit | **edit** | – | – |
 | Customers | edit | edit | **edit** | – | – |
 | Products | edit | edit | – | **edit** | – |
 | Inventory and stock movements | edit | edit | – | **edit** | – |
-| Discounts | edit | edit | – | – | – |
 | Reports and exports | edit | edit | – | – | – |
-| Reviews, content | edit | edit | – | – | – |
-| Audit log | edit | view | – | – | – |
-| Staff and roles | edit | – | – | – | – |
-| System settings | edit | – | – | – | – |
+| Discounts, reviews, content | edit | – | – | – | – |
+| Audit log | edit | – | – | – | – |
+| Staff and roles, settings | edit | – | – | – | – |
 
-This follows the brief: OWNER can do everything. ADMIN covers products, orders, customers, inventory, analytics and reports, plus discounts, reviews and content, and can read the audit trail. ADMIN is kept out of staff roles and system settings. SALES covers orders, customers and sales analytics. INVENTORY covers products, inventory and stock movements. VIEWER gets a read-only dashboard.
+**Change from Phase 1:** ADMIN previously also managed discounts, reviews and content, and could read the audit log. Brief §46 limits ADMIN to dashboard, sales, orders, products, inventory, customers and reports, so those areas are now OWNER-only.
+
+In the UI, the sidebar and search only offer what the role can open. Opening a URL directly without permission shows an access-denied page, and that page's data is never loaded.
 
 ## Enforcement: never by hiding buttons
 
 | Layer | How | Proven by |
 |---|---|---|
 | Middleware | `/admin` and `/api/admin` require a signed-in session (redirect or 401). **Closed with a 404 in production if Supabase isn't configured.** | build + smoke test |
+| Page | `guard(permission)`: signed out → login with `?next=`; no permission → access-denied page, data not loaded | visual check as each role |
+| Server action | `act(permission, …)` → `requireStaff` | `tests/phase2.test.ts`: SALES calling `restockAction` gets `{ ok: false }`; signed out gets "Please sign in." |
 | Route handler | `requireStaff(db, "orders:write")` as the first line. 401 when not signed in, 403 when the role lacks the permission. | `tests/auth.test.ts`: an INVENTORY user calling the order-status API directly gets **403**; SALES gets 200 |
 | Service | every mutating function calls `assertCan(actor, …)` again | `tests/auth.test.ts`: calling `restock()` as SALES throws |
 | Database | RLS for Supabase's public roles; column privileges hide costs and margins | `tests/rls.test.ts` |

@@ -1,12 +1,45 @@
-export const metadata = { title: "Staff sign-in", robots: { index: false } };
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db/client";
+import { devAuthEnabled, getStaff, supabaseConfigured } from "@/lib/auth/session";
+import { listStaff } from "@/lib/admin/misc";
+import { LoginForm } from "./login-form";
+import { devSignInAction } from "../actions";
 
-/** Placeholder. The sign-in form (Supabase email + password / magic link) is built with the admin UI in Phase 2. */
-export default function StaffLogin() {
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Staff sign-in | SAURI", robots: { index: false } };
+
+export default async function StaffLogin({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
+  const { next, error } = await searchParams;
+  const safeNext = next && next.startsWith("/admin") && !next.startsWith("/admin/login") ? next : "/admin/dashboard";
+  const db = getDb();
+  if (await getStaff(db)) redirect(safeNext);
+  const dev = devAuthEnabled();
+  const staff = dev ? await listStaff(db) : [];
   return (
-    <main className="grid min-h-screen place-items-center bg-admin-bg p-8 font-[system-ui]">
-      <div className="max-w-sm rounded-lg border border-neutral-200 bg-white p-6">
-        <h1 className="text-lg font-semibold">Staff sign-in</h1>
-        <p className="mt-2 text-sm text-neutral-600">Sign-in is added with the admin dashboard in Phase 2. Access is granted to Supabase accounts that match an active row in the staff users table.</p>
+    <main className="admin grid min-h-dvh place-items-center px-4 py-10">
+      <div className="w-full max-w-sm">
+        <p className="mb-6 text-center font-display text-[20px] tracking-[0.32em]">SAURI</p>
+        <div className="rounded-lg border border-line bg-surface p-6">
+          <h1 className="text-[17px] font-semibold">Staff sign-in</h1>
+          <p className="mt-1 text-[13px] text-muted">Business dashboard for SAURI staff.</p>
+          {error === "no-access" && <p role="alert" className="mt-4 rounded-md bg-[#f8e9e6] px-3 py-2 text-[13px] text-neg">This account isn’t an active staff member. Ask the owner to add your email.</p>}
+          {supabaseConfigured() ? <LoginForm next={safeNext} /> : dev ? (
+            <div className="mt-5 grid gap-2">
+              <p className="rounded-md bg-[#f7eedd] px-3 py-2 text-xs text-warn">Development mode: Supabase isn’t configured, so choose a staff account to sign in as. This option does not exist in production.</p>
+              {staff.filter((s) => s.active).map((s) => (
+                <form key={s.id} action={devSignInAction.bind(null, s.email, safeNext)}>
+                  <button className="flex w-full items-center justify-between rounded-md border border-line px-3 py-2.5 text-left text-[13.5px] hover:border-accent hover:bg-accent-soft">
+                    <span><span className="block font-medium">{s.name}</span><span className="text-xs text-muted">{s.email}</span></span>
+                    <span className="rounded bg-line-soft px-2 py-0.5 text-xs font-medium text-muted">{s.role.toLowerCase()}</span>
+                  </button>
+                </form>
+              ))}
+            </div>
+          ) : <p className="mt-4 text-[13px] text-muted">Sign-in is not configured.</p>}
+        </div>
       </div>
     </main>
   );

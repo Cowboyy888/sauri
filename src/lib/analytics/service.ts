@@ -63,6 +63,7 @@ export type Metrics = {
   grossSalesCents: number; discountCents: number; revenueCents: number; refundCents: number; netRevenueCents: number;
   cogsCents: number; grossProfitCents: number; grossMarginPct: number; averageOrderValueCents: number;
   paymentFeeCents: number; shippingCostCents: number; contributionProfitCents: number;
+  shippingChargedCents: number; taxCents: number;
 };
 
 /** Every headline KPI in one round trip. */
@@ -73,6 +74,7 @@ export async function getMetrics(db: DbOrTx, r: Range): Promise<Metrics> {
     select count(*) as orders, coalesce(sum(subtotal_cents),0) as gross, coalesce(sum(discount_total_cents),0) as disc,
            coalesce(sum(refund_total_cents),0) as ref, coalesce(sum(cost_total_cents),0) as cogs, coalesce(sum(gross_profit_cents),0) as gp,
            coalesce(sum(payment_fee_cents),0) as fees, coalesce(sum(shipping_cost_cents),0) as ship, count(distinct customer_id) as customers,
+           coalesce(sum(shipping_total_cents),0) as ship_charged, coalesce(sum(tax_total_cents),0) as tax,
            (select coalesce(sum(i.quantity),0) from order_items i join rec o on o.id = i.order_id where ${NOT_REFUNDED}) as units,
            (select count(*) from firsts where f >= ${r.from.toISOString()} and f < ${r.to.toISOString()}) as new_customers
     from rec`);
@@ -83,27 +85,56 @@ export async function getMetrics(db: DbOrTx, r: Range): Promise<Metrics> {
     grossSalesCents: gross, discountCents: disc, revenueCents: revenue, refundCents: ref, netRevenueCents: net,
     cogsCents: cogs, grossProfitCents: gp, grossMarginPct: pctOf(gp, net), averageOrderValueCents: orders ? Math.round(net / orders) : 0,
     paymentFeeCents: fees, shippingCostCents: ship, contributionProfitCents: gp - fees - ship,
+    shippingChargedCents: n(m!.ship_charged), taxCents: n(m!.tax),
   };
 }
 
-export type SeriesPoint = { bucket: string; netRevenueCents: number; grossProfitCents: number; orders: number; units: number };
-export async function getSeries(db: DbOrTx, r: Range, unit?: "hour" | "day" | "week" | "month"): Promise<{ unit: string; points: SeriesPoint[] }> {
-  const span = r.to.getTime() - r.from.getTime();
-  const u = unit ?? (span <= 1.5 * 86_400_000 ? "hour" : span <= 95 * 86_400_000 ? "day" : span <= 400 * 86_400_000 ? "week" : "month");
+export type SeriesPoint = { bucket: string; netRevenueCents: number; cogsCents: number; grossProfitCents: number; orders: number; units: number };
+export type SeriesUnit = "hour" | "day" | "week" | "month";
+export const autoUnit = (r: Range): SeriesUnit => { const span = r.to.getTime() - r.from.getTime(); return span <= 1.5 * 86_400_000 ? "hour" : span <= 95 * 86_400_000 ? "day" : span <= 400 * 86_400_000 ? "week" : "month"; };
+const bucketsCte = (r: Range, u: SeriesUnit) => {
   const tz = STORE.timezone, uu = sql.raw(`'${u}'`), step = sql.raw(`'1 ${u}'::interval`);
+  return sql`select generate_series(date_trunc(${uu}, ${r.from.toISOString()}::timestamptz at time zone ${tz}),
+                                    date_trunc(${uu}, (${r.to.toISOString()}::timestamptz - interval '1 microsecond') at time zone ${tz}), ${step}) as bucket`;
+};
+
+/** Zero-filled time series. With `productId`, figures come from that product's order lines only. */
+export async function getSeries(db: DbOrTx, r: Range, opts: { unit?: SeriesUnit; productId?: string } = {}): Promise<{ unit: SeriesUnit; points: SeriesPoint[] }> {
+  const u = opts.unit ?? autoUnit(r), tz = STORE.timezone, uu = sql.raw(`'${u}'`);
+  const src = opts.productId
+    ? sql`select date_trunc(${uu}, o.paid_at at time zone ${tz}) as bucket, o.id,
+               sum(i.line_total_cents) as net, sum(i.line_cost_cents) as cogs, sum(i.line_profit_cents) as gp, sum(i.quantity) as units
+          from order_items i join orders o on o.id = i.order_id
+          where ${RECOGNIZED} and ${NOT_REFUNDED} and ${inRange(r)} and i.product_id = ${opts.productId} group by 1, o.id`
+    : sql`select date_trunc(${uu}, o.paid_at at time zone ${tz}) as bucket, o.id,
+               o.subtotal_cents - o.discount_total_cents - o.refund_total_cents as net, o.cost_total_cents as cogs, o.gross_profit_cents as gp,
+               case when ${NOT_REFUNDED} then (select coalesce(sum(i.quantity),0) from order_items i where i.order_id = o.id) else 0 end as units
+          from orders o where ${RECOGNIZED} and ${inRange(r)}`;
   const pts = await rows<Record<string, string>>(db, sql`
-    with b as (select generate_series(date_trunc(${uu}, ${r.from.toISOString()}::timestamptz at time zone ${tz}),
-                                      date_trunc(${uu}, (${r.to.toISOString()}::timestamptz - interval '1 microsecond') at time zone ${tz}), ${step}) as bucket),
-    o as (select date_trunc(${uu}, o.paid_at at time zone ${tz}) as bucket, o.*,
-                 case when ${NOT_REFUNDED} then (select coalesce(sum(i.quantity),0) from order_items i where i.order_id = o.id) else 0 end as units
-          from orders o where ${RECOGNIZED} and ${inRange(r)})
+    with b as (${bucketsCte(r, u)}), o as (${src})
     select to_char(b.bucket, 'YYYY-MM-DD"T"HH24:MI') as bucket, count(o.id) as orders, coalesce(sum(o.units),0) as units,
-           coalesce(sum(o.subtotal_cents - o.discount_total_cents - o.refund_total_cents),0) as net, coalesce(sum(o.gross_profit_cents),0) as gp
+           coalesce(sum(o.net),0) as net, coalesce(sum(o.cogs),0) as cogs, coalesce(sum(o.gp),0) as gp
     from b left join o on o.bucket = b.bucket group by b.bucket order by b.bucket`);
-  return { unit: u, points: pts.map((p) => ({ bucket: p.bucket!, orders: n(p.orders), units: n(p.units), netRevenueCents: n(p.net), grossProfitCents: n(p.gp) })) };
+  return { unit: u, points: pts.map((p) => ({ bucket: p.bucket!, orders: n(p.orders), units: n(p.units), netRevenueCents: n(p.net), cogsCents: n(p.cogs), grossProfitCents: n(p.gp) })) };
 }
 
-export type GroupRow = { key: string; label: string; netRevenueCents: number; cogsCents: number; grossProfitCents: number; grossMarginPct: number; units: number; orders: number; shareOfRevenuePct: number };
+/** New vs returning buyers per bucket, and the cumulative number of customers who have ever bought. */
+export async function getCustomerSeries(db: DbOrTx, r: Range, unit?: SeriesUnit) {
+  const u = unit ?? autoUnit(r), tz = STORE.timezone, uu = sql.raw(`'${u}'`);
+  const pts = await rows<Record<string, string>>(db, sql`
+    with b as (${bucketsCte(r, u)}),
+    firsts as (select customer_id, min(paid_at) as f from orders o where ${RECOGNIZED} group by customer_id),
+    buys as (select distinct date_trunc(${uu}, o.paid_at at time zone ${tz}) as bucket, o.customer_id, (date_trunc(${uu}, f.f at time zone ${tz}) = date_trunc(${uu}, o.paid_at at time zone ${tz})) as is_new
+             from orders o join firsts f using (customer_id) where ${RECOGNIZED} and ${inRange(r)})
+    select to_char(b.bucket, 'YYYY-MM-DD"T"HH24:MI') as bucket,
+           count(distinct buys.customer_id) filter (where buys.is_new) as new_customers,
+           count(distinct buys.customer_id) filter (where not buys.is_new) as returning_customers,
+           (select count(*) from firsts where (f at time zone ${tz}) < b.bucket + ${sql.raw(`'1 ${u}'::interval`)}) as total_customers
+    from b left join buys on buys.bucket = b.bucket group by b.bucket order by b.bucket`);
+  return { unit: u, points: pts.map((p) => ({ bucket: p.bucket!, newCustomers: n(p.new_customers), returningCustomers: n(p.returning_customers), totalCustomers: n(p.total_customers) })) };
+}
+
+export type GroupRow = { key: string; label: string; netRevenueCents: number; cogsCents: number; grossProfitCents: number; grossMarginPct: number; units: number; orders: number; shareOfRevenuePct: number; averageOrderValueCents: number };
 const GROUP = {
   product: [sql.raw(`i.product_id::text`), sql.raw(`max(i.product_name_snapshot)`)],
   category: [sql.raw(`c.slug`), sql.raw(`max(c.name)`)],
@@ -112,19 +143,20 @@ const GROUP = {
 } as const;
 const MATERIAL: Record<string, string> = { yg: "14K Yellow Gold", wg: "14K White Gold", vm: "18K Gold Vermeil", ss: "Sterling Silver" };
 
-function withShare(list: Omit<GroupRow, "shareOfRevenuePct">[]): GroupRow[] {
+function withShare(list: Omit<GroupRow, "shareOfRevenuePct" | "averageOrderValueCents">[]): GroupRow[] {
   const tot = list.reduce((a, x) => a + x.netRevenueCents, 0);
-  return list.map((x) => ({ ...x, shareOfRevenuePct: pctOf(x.netRevenueCents, tot) }));
+  return list.map((x) => ({ ...x, shareOfRevenuePct: pctOf(x.netRevenueCents, tot), averageOrderValueCents: x.orders ? Math.round(x.netRevenueCents / x.orders) : 0 }));
 }
 
 /** Line-level sales from order-item snapshots (so renamed products still report correctly). Fully refunded orders are excluded. */
-export async function getSalesBy(db: DbOrTx, r: Range, by: keyof typeof GROUP): Promise<GroupRow[]> {
+export async function getSalesBy(db: DbOrTx, r: Range, by: keyof typeof GROUP, opts: { categorySlug?: string; productId?: string } = {}): Promise<GroupRow[]> {
   const [key, label] = GROUP[by];
   const res = await rows<Record<string, string>>(db, sql`
     select ${key} as key, ${label} as label, sum(i.line_total_cents) as rev, sum(i.line_cost_cents) as cost, sum(i.line_profit_cents) as gp,
            sum(i.quantity) as units, count(distinct o.id) as orders
     from order_items i join orders o on o.id = i.order_id join products p on p.id = i.product_id join categories c on c.id = p.category_id
     where ${RECOGNIZED} and ${NOT_REFUNDED} and ${inRange(r)}
+      ${opts.categorySlug ? sql`and c.slug = ${opts.categorySlug}` : sql``} ${opts.productId ? sql`and i.product_id = ${opts.productId}` : sql``}
     group by ${key} order by rev desc`);
   return withShare(res.map((x) => ({ key: x.key!, label: by === "material" ? MATERIAL[x.label!] ?? x.label! : x.label!, netRevenueCents: n(x.rev), cogsCents: n(x.cost), grossProfitCents: n(x.gp), grossMarginPct: pctOf(n(x.gp), n(x.rev)), units: n(x.units), orders: n(x.orders) })));
 }
@@ -207,8 +239,9 @@ export const getGrossMargin = async (db: DbOrTx, r: Range) => (await getMetrics(
 export const getOrders = async (db: DbOrTx, r: Range) => (await getMetrics(db, r)).orders;
 export const getUnitsSold = async (db: DbOrTx, r: Range) => (await getMetrics(db, r)).units;
 export const getAverageOrderValue = async (db: DbOrTx, r: Range) => (await getMetrics(db, r)).averageOrderValueCents;
+/** Brief (Phase 2 §18): available stock × cost price. Units reserved by unpaid checkouts are excluded until they sell or are released. */
 export async function getInventoryValue(db: DbOrTx) {
-  const [x] = await rows<{ v: string }>(db, sql`select coalesce(sum(inventory_value_cents),0) as v from variant_stock`);
+  const [x] = await rows<{ v: string }>(db, sql`select coalesce(sum(inventory_value_cents),0) as v from variant_stock where product_status <> 'archived'`);
   return n(x!.v);
 }
 export const getLowStockProducts = async (db: DbOrTx) => (await getInventory(db, { onlyAttention: true })).filter((x) => x.status === "LOW_STOCK");

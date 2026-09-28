@@ -15,6 +15,13 @@
       "when": 1790558213288,
       "tag": "0001_views_and_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790559276167,
+      "tag": "0002_dashboard_views_and_search",
+      "breakpoints": true
     }
   ]
 }
