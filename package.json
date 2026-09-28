@@ -16,6 +16,8 @@
     "db:seed:demo": "tsx scripts/seed.ts --demo"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
     "drizzle-orm": "^0.45.3",
     "next": "^15.5.26",
     "pg": "^8.23.0",

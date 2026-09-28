@@ -1,19 +1,38 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
 /**
- * TEMPORARY admin guard until staff login (phase 3).
- * - Production: /admin requires ADMIN_BASIC_AUTH ("user:password"); if it is not set, /admin is closed.
- * - Development: open, so you can work locally.
- * Real per-user auth + role checks replace this; services already enforce roles via assertCan().
+ * Coarse gate for /admin and /api/admin, plus Supabase session refresh.
+ * This only checks that SOMEONE is signed in. Roles are checked in every route and service (requireStaff / assertCan).
+ * - Supabase configured: no session → /admin/login (pages) or 401 (API).
+ * - Supabase not configured: closed in production; open in development (routes still require AUTH_DEV_STAFF_EMAIL).
  */
-export function middleware(req: NextRequest) {
-  const creds = process.env.ADMIN_BASIC_AUTH;
-  if (process.env.NODE_ENV !== "production" && !creds) return NextResponse.next();
-  if (!creds) return new NextResponse("Not found", { status: 404 });
-  const header = req.headers.get("authorization") ?? "";
-  const [scheme, value] = header.split(" ");
-  if (scheme === "Basic" && value && atob(value) === creds) return NextResponse.next();
-  return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="SAURI admin"' } });
+export async function middleware(req: NextRequest) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const isApi = req.nextUrl.pathname.startsWith("/api/");
+  const isLogin = req.nextUrl.pathname === "/admin/login";
+  if (!url || !anonKey) {
+    if (process.env.NODE_ENV === "production") return isApi ? NextResponse.json({ error: "Not found." }, { status: 404 }) : new NextResponse("Not found", { status: 404 });
+    return NextResponse.next();
+  }
+  let res = NextResponse.next({ request: req });
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => req.cookies.getAll(),
+      setAll: (list) => {
+        list.forEach(({ name, value }) => req.cookies.set(name, value));
+        res = NextResponse.next({ request: req });
+        list.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+      },
+    },
+  });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user && !isLogin) {
+    if (isApi) return NextResponse.json({ error: "Please sign in.", code: "UNAUTHENTICATED" }, { status: 401 });
+    const to = req.nextUrl.clone(); to.pathname = "/admin/login"; to.search = "";
+    return NextResponse.redirect(to);
+  }
+  return res;
 }
 
 export const config = { matcher: ["/admin/:path*", "/api/admin/:path*"] };

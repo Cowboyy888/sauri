@@ -19,7 +19,7 @@ export async function validateDiscount(tx: DbOrTx, code: string, lines: PricedLi
   if (d.usageLimit != null && d.usedCount >= d.usageLimit) throw new ValidationError("This code has reached its usage limit.");
   const subtotal = lines.reduce((a, l) => a + l.unitPriceCents * l.quantity, 0);
   if (subtotal < d.minSubtotalCents) throw new ValidationError(`This code needs a minimum order of ${formatMoney(d.minSubtotalCents)}.`);
-  if ((d.categoryId || d.productId) && eligibleSubtotal(lines, { ...d, type: d.type }) === 0) throw new ValidationError("This code does not apply to the items in your bag.");
+  if ((d.categoryId || d.productId) && eligibleSubtotal(lines, d) === 0) throw new ValidationError("This code does not apply to the items in your bag.");
   if (d.perCustomerLimit != null && customerId) {
     const [u] = await tx.select({ n: count() }).from(discountUsages)
       .innerJoin(orders, eq(orders.id, discountUsages.orderId))
