@@ -1,0 +1,617 @@
+{
+ "materials": {
+  "yg": {
+   "name": "14K Yellow Gold",
+   "short": "Yellow gold",
+   "sw": "#D6B36C",
+   "st": [
+    "#F7E9BD",
+    "#DDBB6D",
+    "#A77E31",
+    "#EFD495"
+   ],
+   "f": 1
+  },
+  "wg": {
+   "name": "14K White Gold",
+   "short": "White gold",
+   "sw": "#D3D4D6",
+   "st": [
+    "#FBFBF9",
+    "#D6D7D9",
+    "#9C9FA4",
+    "#EEEFF0"
+   ],
+   "f": 1
+  },
+  "vm": {
+   "name": "18K Gold Vermeil",
+   "short": "Vermeil",
+   "sw": "#E3B769",
+   "st": [
+    "#F8E3B2",
+    "#E2B563",
+    "#AF7A2B",
+    "#F1CC82"
+   ],
+   "f": 0.62
+  },
+  "ss": {
+   "name": "Sterling Silver",
+   "short": "Silver",
+   "sw": "#C3C5C8",
+   "st": [
+    "#F6F6F5",
+    "#CBCDD0",
+    "#8D9095",
+    "#E4E5E7"
+   ],
+   "f": 0.48
+  }
+ },
+ "products": [
+  {
+   "id": "aurora",
+   "slug": "aurora-signet-ring",
+   "name": "Aurora Signet Ring",
+   "cat": "rings",
+   "shape": "signet",
+   "price": 148,
+   "mats": [
+    "yg",
+    "wg",
+    "vm",
+    "ss"
+   ],
+   "size": {
+    "type": "ring",
+    "opts": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   "gems": [],
+   "engrave": true,
+   "badge": "Best seller",
+   "isBest": true,
+   "rating": 4.9,
+   "reviews": 124,
+   "occ": [
+    "everyday"
+   ],
+   "short": "A softly rounded oval signet, polished to a mirror finish and weighted to sit flat on the finger.",
+   "desc": "Aurora is our take on the signet: slimmer through the shank than a traditional seal ring, with an oval face you can leave bare or engrave with up to three characters. It stacks cleanly beside thin bands and holds its own worn alone.",
+   "details": [
+    "Face measures 11 × 8 mm",
+    "Band width 2.2 mm at the base",
+    "Solid construction, no hollow backs",
+    "Optional engraving, up to 3 characters"
+   ]
+  },
+  {
+   "id": "elan",
+   "slug": "elan-dome-ring",
+   "name": "Élan Dome Ring",
+   "cat": "rings",
+   "shape": "dome",
+   "price": 128,
+   "mats": [
+    "yg",
+    "vm",
+    "ss"
+   ],
+   "size": {
+    "type": "ring",
+    "opts": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   "gems": [],
+   "badge": "New",
+   "isNew": true,
+   "rating": 4.8,
+   "reviews": 41,
+   "occ": [
+    "everyday",
+    "statement"
+   ],
+   "short": "A high-polished dome that tapers to a fine band at the back of the finger.",
+   "desc": "Élan borrows the proportions of a 1970s cocktail ring and pares them back. The dome rises 4 mm at the front and narrows toward the palm, so it feels substantial without catching on everything you touch.",
+   "details": [
+    "Dome height 4 mm",
+    "Tapers from 7 mm to 2 mm",
+    "Comfort-fit interior"
+   ]
+  },
+  {
+   "id": "seren",
+   "slug": "seren-stacking-ring",
+   "name": "Seren Stacking Ring",
+   "cat": "rings",
+   "shape": "band",
+   "price": 68,
+   "mats": [
+    "yg",
+    "wg",
+    "vm",
+    "ss"
+   ],
+   "size": {
+    "type": "ring",
+    "opts": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   "gems": [],
+   "isBest": true,
+   "rating": 4.8,
+   "reviews": 212,
+   "occ": [
+    "everyday",
+    "gifts"
+   ],
+   "short": "A 1.2 mm plain band paired with a pavé twin, sold together as a set of two.",
+   "desc": "Two fine bands made to be worn together or split across hands: one polished, one set with seven tiny white topaz stones. They are thin enough to layer beside a solitaire and sturdy enough for every day.",
+   "details": [
+    "Set of two bands",
+    "Band width 1.2 mm",
+    "Seven 1 mm white topaz on the pavé band"
+   ]
+  },
+  {
+   "id": "vesper",
+   "slug": "vesper-solitaire-ring",
+   "name": "Vesper Solitaire Ring",
+   "cat": "rings",
+   "shape": "solitaire",
+   "price": 690,
+   "mats": [
+    "yg",
+    "wg"
+   ],
+   "size": {
+    "type": "ring",
+    "opts": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   "gems": [
+    "Diamond",
+    "Sapphire"
+   ],
+   "badge": "Exclusive",
+   "rating": 5,
+   "reviews": 37,
+   "occ": [
+    "wedding"
+   ],
+   "short": "A 0.5 ct round lab-grown diamond or sapphire, set high on four slim prongs.",
+   "desc": "Vesper keeps the setting quiet so the stone does the work. Four knife-edge prongs lift a half-carat round brilliant just above the band, letting light in from the sides. Every lab-grown diamond is IGI certified.",
+   "details": [
+    "0.5 ct round brilliant, F–G colour, VS clarity",
+    "IGI certificate included",
+    "Band width 1.8 mm"
+   ]
+  },
+  {
+   "id": "isla",
+   "slug": "isla-eternity-band",
+   "name": "Isla Eternity Band",
+   "cat": "rings",
+   "shape": "eternity",
+   "price": 420,
+   "mats": [
+    "yg",
+    "wg"
+   ],
+   "size": {
+    "type": "ring",
+    "opts": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   "gems": [
+    "Sapphire",
+    "Diamond"
+   ],
+   "badge": "Limited",
+   "rating": 4.9,
+   "reviews": 58,
+   "occ": [
+    "wedding",
+    "statement"
+   ],
+   "short": "Eleven shared-prong stones across the front of a 2 mm band.",
+   "desc": "A half-eternity band set with eleven matched stones, finished smooth across the palm side so it sits comfortably beside an engagement ring. Produced in small runs as stones are matched by hand.",
+   "details": [
+    "Eleven 2 mm stones, 0.4 ctw",
+    "Half-eternity setting",
+    "Limited production"
+   ]
+  },
+  {
+   "id": "luna",
+   "slug": "luna-huggie-hoops",
+   "name": "Luna Huggie Hoops",
+   "cat": "earrings",
+   "shape": "hoop",
+   "price": 98,
+   "mats": [
+    "yg",
+    "wg",
+    "vm",
+    "ss"
+   ],
+   "gems": [],
+   "badge": "Best seller",
+   "isBest": true,
+   "rating": 4.9,
+   "reviews": 486,
+   "occ": [
+    "everyday",
+    "gifts"
+   ],
+   "short": "Chunky, close-fitting hoops with a hinged click closure. Sold as a pair.",
+   "desc": "The hoop we reach for first. Luna hugs the lobe with a 12 mm diameter and a softly domed profile, and the hinge clicks shut securely enough to sleep in.",
+   "details": [
+    "12 mm inner diameter",
+    "3.5 mm thick",
+    "Hinged click closure",
+    "Sold as a pair"
+   ],
+   "size": null
+  },
+  {
+   "id": "mira",
+   "slug": "mira-pearl-earrings",
+   "name": "Mira Pearl Earrings",
+   "cat": "earrings",
+   "shape": "pearl",
+   "price": 118,
+   "mats": [
+    "yg",
+    "vm"
+   ],
+   "gems": [
+    "Pearl"
+   ],
+   "badge": "New",
+   "isNew": true,
+   "rating": 4.7,
+   "reviews": 63,
+   "occ": [
+    "everyday",
+    "wedding",
+    "gifts"
+   ],
+   "short": "A single freshwater pearl suspended from a slim huggie.",
+   "desc": "Each Mira pairs a near-round freshwater pearl with a fine hoop, so the pearl moves slightly as you turn your head. Pearls are hand-selected for lustre; no two pairs are quite identical.",
+   "details": [
+    "7–7.5 mm freshwater pearls",
+    "Detachable pearl drop",
+    "Sold as a pair"
+   ],
+   "size": null
+  },
+  {
+   "id": "astra",
+   "slug": "astra-diamond-studs",
+   "name": "Astra Diamond Studs",
+   "cat": "earrings",
+   "shape": "stud",
+   "price": 360,
+   "mats": [
+    "yg",
+    "wg"
+   ],
+   "gems": [
+    "Diamond"
+   ],
+   "isBest": true,
+   "rating": 4.9,
+   "reviews": 151,
+   "occ": [
+    "everyday",
+    "wedding",
+    "gifts"
+   ],
+   "short": "Quarter-carat lab-grown diamonds in a low four-prong basket.",
+   "desc": "Astra studs sit close to the ear so they read as a point of light, not a statement. The basket setting is low enough to wear under a hat or headphones.",
+   "details": [
+    "0.25 ctw total, 0.125 ct each",
+    "Screw-back posts",
+    "IGI certified"
+   ],
+   "size": null
+  },
+  {
+   "id": "halo",
+   "slug": "halo-statement-hoops",
+   "name": "Halo Statement Hoops",
+   "cat": "earrings",
+   "shape": "bighoop",
+   "price": 165,
+   "mats": [
+    "yg",
+    "vm"
+   ],
+   "gems": [],
+   "badge": "New",
+   "isNew": true,
+   "rating": 4.8,
+   "reviews": 22,
+   "occ": [
+    "statement"
+   ],
+   "short": "An elongated oval hoop, hollow-formed so it stays light.",
+   "desc": "Halo is our largest hoop at 38 mm, formed from hollow tube so it weighs less than you would expect. The oval shape sits flatter against the jaw than a round hoop.",
+   "details": [
+    "38 × 22 mm oval",
+    "Hollow-formed, 3.4 g each",
+    "Latch-back closure"
+   ],
+   "size": null
+  },
+  {
+   "id": "soleil",
+   "slug": "soleil-chain-necklace",
+   "name": "Soleil Chain Necklace",
+   "cat": "necklaces",
+   "shape": "chain",
+   "price": 185,
+   "mats": [
+    "yg",
+    "vm",
+    "ss"
+   ],
+   "size": {
+    "type": "length",
+    "opts": [
+     "16\"",
+     "18\"",
+     "20\""
+    ],
+    "def": "18\""
+   },
+   "gems": [],
+   "isBest": true,
+   "rating": 4.8,
+   "reviews": 173,
+   "occ": [
+    "everyday",
+    "statement"
+   ],
+   "short": "A 4 mm rolo chain with a satisfying weight and a lobster clasp.",
+   "desc": "Soleil is a foundation chain: substantial enough to wear alone, and made with a spring ring at 16 and 18 inches so one chain covers two lengths when layered.",
+   "details": [
+    "4 mm rolo links",
+    "Lobster clasp with length jump ring",
+    "Wear alone or layered"
+   ]
+  },
+  {
+   "id": "nova",
+   "slug": "nova-pendant-necklace",
+   "name": "Nova Pendant Necklace",
+   "cat": "necklaces",
+   "shape": "pendant",
+   "price": 210,
+   "mats": [
+    "yg",
+    "wg"
+   ],
+   "size": {
+    "type": "length",
+    "opts": [
+     "16\"",
+     "18\"",
+     "20\""
+    ],
+    "def": "18\""
+   },
+   "gems": [
+    "Diamond"
+   ],
+   "badge": "New",
+   "isNew": true,
+   "rating": 4.9,
+   "reviews": 29,
+   "occ": [
+    "everyday",
+    "gifts"
+   ],
+   "short": "A four-point star with a lab-grown diamond at its centre, on a fine cable chain.",
+   "desc": "Nova is small, at 12 mm point to point, and it catches light from the centre stone first and the polished rays second. The chain is fixed to the bail so the star always faces forward.",
+   "details": [
+    "Pendant 12 mm",
+    "0.05 ct lab-grown diamond",
+    "Fine cable chain"
+   ]
+  },
+  {
+   "id": "cleo",
+   "slug": "cleo-initial-necklace",
+   "name": "Cléo Initial Necklace",
+   "cat": "necklaces",
+   "shape": "disc",
+   "price": 145,
+   "mats": [
+    "yg",
+    "vm",
+    "ss"
+   ],
+   "size": {
+    "type": "length",
+    "opts": [
+     "16\"",
+     "18\"",
+     "20\""
+    ],
+    "def": "18\""
+   },
+   "gems": [],
+   "initial": true,
+   "isBest": true,
+   "rating": 4.9,
+   "reviews": 302,
+   "occ": [
+    "everyday",
+    "gifts"
+   ],
+   "short": "A domed disc hand-stamped with one letter in our serif alphabet.",
+   "desc": "Cléo is stamped by hand in our studio with a letter from a serif alphabet we drew for the purpose. Choose any initial from A to Z. Personalised pieces ship in three to five days.",
+   "details": [
+    "Disc 12 mm",
+    "Hand-stamped initial, A–Z",
+    "Ships in 3–5 days"
+   ]
+  },
+  {
+   "id": "perle",
+   "slug": "perle-strand-necklace",
+   "name": "Perle Strand Necklace",
+   "cat": "necklaces",
+   "shape": "strand",
+   "price": 240,
+   "cmp": 295,
+   "mats": [
+    "yg"
+   ],
+   "size": {
+    "type": "length",
+    "opts": [
+     "16\"",
+     "18\"",
+     "20\""
+    ],
+    "def": "18\""
+   },
+   "gems": [
+    "Pearl"
+   ],
+   "badge": "Sale",
+   "rating": 4.7,
+   "reviews": 47,
+   "occ": [
+    "wedding",
+    "statement"
+   ],
+   "short": "A single strand of 6 mm freshwater pearls, knotted between each bead.",
+   "desc": "Hand-knotted on silk so a broken strand never scatters. The clasp is a small gold toggle that doubles as a front detail if you turn it round.",
+   "details": [
+    "6 mm freshwater pearls",
+    "Silk-knotted",
+    "Toggle clasp"
+   ]
+  },
+  {
+   "id": "celeste",
+   "slug": "celeste-tennis-bracelet",
+   "name": "Celeste Tennis Bracelet",
+   "cat": "bracelets",
+   "shape": "tennis",
+   "price": 850,
+   "mats": [
+    "yg",
+    "wg"
+   ],
+   "gems": [
+    "Diamond",
+    "Sapphire"
+   ],
+   "isBest": true,
+   "rating": 5,
+   "reviews": 88,
+   "occ": [
+    "wedding",
+    "statement"
+   ],
+   "short": "Forty stones in individual four-prong settings, with a hidden box clasp.",
+   "desc": "Celeste is flexible enough to drape flat on the wrist, with each stone in its own articulated setting. The box clasp has a secondary safety latch.",
+   "details": [
+    "40 stones, 2 ctw",
+    "Box clasp with safety latch",
+    "6.5 in length"
+   ],
+   "size": null
+  },
+  {
+   "id": "rive",
+   "slug": "rive-cuff",
+   "name": "Rive Cuff",
+   "cat": "bracelets",
+   "shape": "cuff",
+   "price": 155,
+   "cmp": 185,
+   "mats": [
+    "yg",
+    "vm",
+    "ss"
+   ],
+   "gems": [],
+   "badge": "Sale",
+   "isNew": true,
+   "rating": 4.7,
+   "reviews": 34,
+   "occ": [
+    "statement"
+   ],
+   "short": "A flat, open cuff with softly bevelled edges.",
+   "desc": "Rive is cut from flat stock and bent by hand, so it can be gently adjusted to fit. The edges are bevelled to catch light along the length of the wrist.",
+   "details": [
+    "8 mm wide",
+    "Adjustable by hand",
+    "Fits most wrists 6–7 in"
+   ],
+   "size": null
+  },
+  {
+   "id": "linea",
+   "slug": "linea-chain-bracelet",
+   "name": "Linea Chain Bracelet",
+   "cat": "bracelets",
+   "shape": "chainb",
+   "price": 110,
+   "mats": [
+    "yg",
+    "vm",
+    "ss"
+   ],
+   "gems": [],
+   "isBest": true,
+   "rating": 4.8,
+   "reviews": 190,
+   "occ": [
+    "everyday",
+    "gifts"
+   ],
+   "short": "A slim oval-link chain with an adjustable slider.",
+   "desc": "Linea is the bracelet you forget you are wearing. Oval links lie flat, and the slider adjusts the fit anywhere from 6 to 7.5 inches.",
+   "details": [
+    "2.5 mm oval links",
+    "Adjustable 6–7.5 in",
+    "Lobster clasp"
+   ],
+   "size": null
+  }
+ ]
+}

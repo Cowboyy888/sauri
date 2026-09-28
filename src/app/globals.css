@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #f3eee6;
+  --color-paper: #fbfaf7;
+  --color-ink: #23211e;
+  --color-champagne: #b89c6c;
+  --color-admin-bg: #f4f4f1;
+  --color-admin-accent: #2f5d50;
+  --font-display: "Bodoni Moda", Georgia, serif;
+  --font-sans: "Jost", system-ui, sans-serif;
+}
