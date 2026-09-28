@@ -8,6 +8,12 @@ One Next.js app, one Postgres database. The storefront and the admin dashboard r
 
 Documentation: [`docs/`](docs): PROJECT_AUDIT, ARCHITECTURE, DATABASE_SCHEMA, BUSINESS_LOGIC, ROLES_AND_PERMISSIONS, ANALYTICS, ERD, **ADMIN_DASHBOARD**.
 
+## Open in VS Code
+
+Double-click **`sauri.code-workspace`** (or *File → Open Workspace from File…*). Accept the recommended extensions, then run the numbered tasks from *Terminal → Run Task…* in order (install, create `.env`, migrate, seed). *Run Build Task* (Ctrl/Cmd+Shift+B) starts the dev server. Debug configurations are under *Run and Debug*.
+
+You need Node.js 20+ and a PostgreSQL database (local, or a Supabase project) whose connection string goes in `.env` as `DATABASE_URL`.
+
 ## Run it
 
 ```bash

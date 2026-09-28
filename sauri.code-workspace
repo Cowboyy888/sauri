@@ -1,0 +1,42 @@
+{
+  "folders": [{ "name": "SAURI", "path": "." }],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "editor.tabSize": 2,
+    "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+    "eslint.useFlatConfig": true,
+    "files.exclude": { "**/.next": true, "**/node_modules": true, "**/*.tsbuildinfo": true },
+    "search.exclude": { "**/.next": true, "**/node_modules": true, "drizzle/meta": true },
+    "files.associations": { "*.css": "tailwindcss" },
+    "tailwindCSS.experimental.classRegex": [["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"], ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"]],
+    "vitest.commandLine": "npx vitest"
+  },
+  "extensions": {
+    "recommendations": ["dbaeumer.vscode-eslint", "bradlc.vscode-tailwindcss", "vitest.explorer", "mikestead.dotenv"]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      { "label": "1. Install dependencies", "type": "shell", "command": "npm install", "problemMatcher": [] },
+      { "label": "2. Create .env from example", "type": "shell", "command": "node -e \"const f=require('fs');if(!f.existsSync('.env')){f.copyFileSync('.env.example','.env');console.log('Created .env: set DATABASE_URL');}else console.log('.env already exists');\"", "problemMatcher": [] },
+      { "label": "3. Database: migrate", "type": "shell", "command": "npm run db:migrate", "problemMatcher": [] },
+      { "label": "4. Database: seed demo data", "type": "shell", "command": "npm run db:seed:demo", "problemMatcher": [] },
+      { "label": "Dev server (localhost:3000)", "type": "shell", "command": "npm run dev", "isBackground": true, "problemMatcher": [], "group": { "kind": "build", "isDefault": true } },
+      { "label": "Test", "type": "shell", "command": "npm test", "problemMatcher": [], "group": { "kind": "test", "isDefault": true } },
+      { "label": "Lint", "type": "shell", "command": "npm run lint", "problemMatcher": ["$eslint-stylish"] },
+      { "label": "Typecheck", "type": "shell", "command": "npm run typecheck", "problemMatcher": ["$tsc"] },
+      { "label": "Build (production)", "type": "shell", "command": "npm run build", "problemMatcher": [] },
+      { "label": "Check everything (lint, typecheck, test, build)", "dependsOrder": "sequence", "dependsOn": ["Lint", "Typecheck", "Test", "Build (production)"], "problemMatcher": [] }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      { "name": "Next.js: debug server", "type": "node-terminal", "request": "launch", "command": "npm run dev" },
+      { "name": "Next.js: debug in Chrome", "type": "chrome", "request": "launch", "url": "http://localhost:3000/admin/login" },
+      { "name": "Vitest: current file", "type": "node", "request": "launch", "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs", "args": ["run", "${relativeFile}"], "console": "integratedTerminal", "autoAttachChildProcesses": true, "smartStep": true, "skipFiles": ["<node_internals>/**"] }
+    ],
+    "compounds": [{ "name": "Next.js: full stack", "configurations": ["Next.js: debug server", "Next.js: debug in Chrome"] }]
+  }
+}
