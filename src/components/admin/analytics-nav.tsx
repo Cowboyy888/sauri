@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "../ui/cn";
 
-const TABS = [["sales", "Sales"], ["products", "Products"], ["customers", "Customers"], ["channels", "Channels"]] as const;
+const TABS = [["sales", "Sales"], ["products", "Products"], ["customers", "Customers"], ["channels", "Channels"], ["shipping", "Shipping"], ["returns", "Returns"]] as const;
 /** Keeps the date range when switching between analytics pages. */
 export function AnalyticsNav({ current, query }: { current: (typeof TABS)[number][0]; query: Record<string, string> }) {
   const q = new URLSearchParams(query).toString();

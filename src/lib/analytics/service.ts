@@ -221,12 +221,16 @@ export async function getCustomerAnalytics(db: DbOrTx, r: Range) {
            (select count(*) from active a join customer_stats s using (customer_id) where s.first_order_at < ${r.from.toISOString()}) as returning,
            (select count(*) from customer_stats where total_orders > 0) as buyers, (select count(*) from customer_stats where total_orders >= 2) as repeaters,
            (select coalesce(sum(total_spent_cents),0) from customer_stats) as lifetime, (select count(*) from active) as active,
-           (select orders from period) as orders, (select net from period) as net`);
-  const buyers = n(x!.buyers), active = n(x!.active), orders = n(x!.orders), net = n(x!.net);
+           (select orders from period) as orders, (select net from period) as net,
+           (select count(*) from customers where merged_into_customer_id is null) as total_customers,
+           (select coalesce(sum(total_orders),0) from customer_stats where total_orders > 0) as buyer_total_orders`);
+  const buyers = n(x!.buyers), active = n(x!.active), orders = n(x!.orders), net = n(x!.net), totalCustomers = n(x!.total_customers);
   return {
     newCustomers: n(x!.new), returningCustomers: n(x!.returning), repeatPurchaseRatePct: pctOf(n(x!.repeaters), buyers),
     averageLifetimeValueCents: buyers ? Math.round(n(x!.lifetime) / buyers) : 0, averageOrderValueCents: orders ? Math.round(net / orders) : 0,
     revenuePerCustomerCents: active ? Math.round(net / active) : 0,
+    totalCustomers, customersWithOrders: buyers, customersWithoutOrders: totalCustomers - buyers,
+    ordersPerCustomer: buyers ? Math.round((n(x!.buyer_total_orders) / buyers) * 10) / 10 : 0,
   };
 }
 

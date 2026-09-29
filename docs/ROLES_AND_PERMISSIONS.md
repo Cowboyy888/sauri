@@ -22,8 +22,25 @@ Updated in Phase 2 to brief §46. Permissions are `area:read` and `area:write` (
 | Discounts, reviews, content | edit | – | – | – | – |
 | Audit log | edit | – | – | – | – |
 | Staff and roles, settings | edit | – | – | – | – |
+| Loyalty (Phase 6) | edit | **view** | **view** | – | – |
 
 **Change from Phase 1:** ADMIN previously also managed discounts, reviews and content, and could read the audit log. Brief §46 limits ADMIN to dashboard, sales, orders, products, inventory, customers and reports, so those areas are now OWNER-only.
+
+**Phase 5:** no new permission area was added. Fulfillment (stage advancement, picking, packages) requires
+`inventory:write` — it's operationally the same staff who already handle stock. Returns status changes,
+refunds and return-shipping tracking require `orders:write`; recording a return's inspection requires
+`inventory:write` (it changes inventory). Shipping-method CRUD and the return policy are store-wide
+settings, so both require `settings:write` (OWNER-only), same as everything else under `/admin/settings`.
+This reuse is deliberate — a fulfillment/returns permission area would just duplicate access that already
+maps onto INVENTORY and SALES/ADMIN's existing scopes.
+
+**Phase 6:** one new permission area, `loyalty` — see docs/CRM.md's RBAC section and docs/LOYALTY.md.
+Balances are visible to ADMIN and SALES (`loyalty:read`, useful in a customer profile), but tiers, earning
+rules, rewards and manual point adjustments are OWNER-only (`loyalty:write`) — the same treatment as
+discounts, since loyalty configuration is money-adjacent. Every other Phase 6 write (tags, notes,
+communications, consent, segment/RFM thresholds, export, merge, anonymize) reuses `customers:write` —
+already held by ADMIN and SALES ("full customer management" / "customer profiles and communication" per
+brief §42) — deliberately, so a second CRM-specific permission area never had to exist.
 
 In the UI, the sidebar and search only offer what the role can open. Opening a URL directly without permission shows an access-denied page, and that page's data is never loaded.
 

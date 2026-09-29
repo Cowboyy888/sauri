@@ -92,7 +92,7 @@ describe("server-side authorization", () => {
     expect(can("ADMIN", "staff:write")).toBe(false);
     expect(can("ADMIN", "settings:write")).toBe(false);
     for (const p of ["products:write", "orders:write", "customers:write", "inventory:write", "sales:read", "reports:read"] as const) expect(can("ADMIN", p)).toBe(true);
-    expect([...PERMISSIONS.SALES].sort()).toEqual(["customers:read", "customers:write", "dashboard:read", "orders:read", "orders:write", "sales:read"]);
+    expect([...PERMISSIONS.SALES].sort()).toEqual(["customers:read", "customers:write", "dashboard:read", "loyalty:read", "orders:read", "orders:write", "sales:read"]);
     expect([...PERMISSIONS.INVENTORY].sort()).toEqual(["dashboard:read", "inventory:read", "inventory:write", "products:read", "products:write"]);
     expect([...PERMISSIONS.VIEWER]).toEqual(["dashboard:read"]);
   });

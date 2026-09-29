@@ -47,6 +47,37 @@ Each range carries its **previous period**: the same length, ending where the ra
 | `getInventory({ onlyAttention })` | every variant: stock, reserved, available, status, value, sold in the last 7 and 30 days, **forecast** |
 | `getCustomerAnalytics(range)` | new vs returning customers, repeat purchase rate, average lifetime value, average order value, revenue per customer |
 
+## Phase 4
+
+No changes. An order paid through the Stripe webhook is written by the same `markOrderPaid` function, into
+the same `orders`/`order_items` rows, as any other paid order — every function below already reports it
+correctly with no new code. This is checked directly in `tests/checkout-e2e.test.ts`, which reads
+`getMetrics()` immediately after a real checkout + webhook and asserts revenue/COGS/gross profit.
+
+## Added in Phase 5
+
+Two new files, `lib/analytics/shipping.ts` and `lib/analytics/returns.ts`, plus their pages
+`/admin/analytics/shipping` and `/admin/analytics/returns` (new tabs on `AnalyticsNav`). Both compute from
+live Phase 5 tables, never from a cached/derived figure:
+
+| Metric | Definition | Zero-safety |
+|---|---|---|
+| Return rate | returned orders ÷ completed orders × 100 | `null` (not `0%`) when there are zero completed orders in the period |
+| Fulfillment time | avg(`shipped_at` − `paid_at`) | orders missing either timestamp are excluded from the average, never treated as zero |
+| Delivery time | avg(`delivered_at` − `shipped_at`) | same rule |
+
+"Completed" for the return-rate denominator means `fulfillment_status in ('delivered','completed')`, dated
+by `paid_at` like every other order-based report here; "returned" means a distinct order with a
+non-rejected `return_requests` row. `shipped_at`/`delivered_at` are read from `order_events` (the moment
+`recomputeOrderFulfillmentStatus` — docs/FULFILLMENT.md — flips the order-level status), not from an
+individual package's own timestamps, since one order can have several packages.
+
+The main dashboard also gained `FulfillmentKpiSection` (`components/admin/dashboard/sections.tsx`):
+counts of orders currently `processing`, `picking`+`packing`, `ready_to_ship`+`partially_shipped`, and
+returns still needing action (`requested` + `received` status), each linking into `/admin/fulfillment` or
+`/admin/returns`. Visible only to roles with `inventory:write` (the same gate the rest of the operational
+dashboard already uses).
+
 ## Added in Phase 2
 
 - `getMetrics` also returns shipping charged and tax collected, for the revenue breakdown.

@@ -4,7 +4,7 @@
  */
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { categories, inventory, inventoryMovements, orderItems, productImages, productVariants, products, reviews, settings, users } from "../db/schema";
+import { categories, inventory, inventoryMovements, orderItems, productImages, productVariants, products, settings, users } from "../db/schema";
 import { NotFoundError, ValidationError } from "../errors";
 import { type Actor, type Role, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
@@ -186,13 +186,6 @@ export async function removeProductImage(db: Db, actor: Actor, imageId: string) 
   if (img) await audit(db, actor, "Removed product image", "product", img.productId, { url: img.url }, undefined);
 }
 
-export async function setReviewStatus(db: Db, actor: Actor, reviewId: string, status: "published" | "hidden" | "pending") {
-  assertCan(actor, "reviews:write");
-  const [before] = await db.select().from(reviews).where(eq(reviews.id, reviewId));
-  if (!before) throw new NotFoundError("Review not found.");
-  await db.update(reviews).set({ status }).where(eq(reviews.id, reviewId));
-  await audit(db, actor, status === "published" ? "Published review" : status === "hidden" ? "Hid review" : "Changed review status", "review", reviewId, { status: before.status }, { status });
-}
 
 export async function updateContent(db: Db, actor: Actor, v: { announce: string; heroTitle: string; heroLede: string }) {
   assertCan(actor, "content:write");

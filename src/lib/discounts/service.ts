@@ -14,6 +14,7 @@ export async function validateDiscount(tx: DbOrTx, code: string, lines: PricedLi
   const clean = code.trim().toUpperCase();
   const [d] = await tx.select().from(discounts).where(sql`upper(${discounts.code}) = ${clean}`);
   if (!d || !d.active) throw new ValidationError(`${clean} is not a valid code.`);
+  if (d.restrictedToCustomerId && d.restrictedToCustomerId !== customerId) throw new ValidationError(`${clean} is not a valid code.`);
   if (now < d.startsAt) throw new ValidationError("This code is not active yet.");
   if (d.endsAt && now > d.endsAt) throw new ValidationError("This code has expired.");
   if (d.usageLimit != null && d.usedCount >= d.usageLimit) throw new ValidationError("This code has reached its usage limit.");

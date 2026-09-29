@@ -13,8 +13,12 @@ line discount     = discount_total split across eligible lines pro rata (largest
 line_total        = quantity × unit price − line discount
 line_cost         = quantity × unit cost
 line_profit       = line_total − line_cost
-shipping_total    = 0 if the channel doesn't charge shipping; $20 express; else free if net ≥ $150 or a free-shipping code; else $8
-tax_total         = 8% of (subtotal − discount)
+shipping_total    = 0 if the channel doesn't charge shipping; else the chosen shipping_methods row's price
+                    (waived if that method is `waivable_above_threshold` and net ≥ $150, or a free-shipping
+                    code) — falls back to the old flat $20 express / $8 standard only when no method id is
+                    given (admin manual orders, the seed script; see lib/orders/pricing.ts)
+tax_total         = calculateTax() in lib/orders/tax.ts — currently 8% of (subtotal − discount); a seam
+                    for real jurisdiction-based tax later, not a second place the rate is hardcoded
 total             = subtotal − discount + shipping + tax
 cost_total        = Σ line_cost
 gross_profit      = (subtotal − discount) − cost_total
@@ -46,11 +50,12 @@ Store rules live in `lib/config.ts`: tax rate, thresholds, carrier costs, time z
 
 Customer statistics (step 9 in the brief) are not stored; the `customer_stats` view derives them from these rows. Revenue, COGS and profit (steps 6–8 in the brief) are written as the order snapshot in step 6 of the list above.
 
-### Payment (Stripe-ready)
+### Payment (Stripe, live in Phase 4 — see docs/CHECKOUT.md, docs/PAYMENTS.md, docs/WEBHOOKS.md)
 
-- `markOrderPaid(orderId, { providerRef, feeCents })`, called by the future Stripe webhook, converts the reservation into a SALE movement, sets `paid_at`, and moves all three statuses to paid. **Idempotent:** a repeated webhook finds the order no longer pending and changes nothing.
-- `recordPaymentFailure()` marks payment failed, keeps the order pending so the shopper can retry, and notifies staff.
-- **The storefront cannot create a paid order.** Only staff (for in-person sales) or the payment confirmation can.
+- `markOrderPaid(orderId, { providerRef, feeCents })`, called by the Stripe webhook (`/api/webhooks/stripe`), converts the reservation into a SALE movement, sets `paid_at`, and moves all three statuses to paid. **Idempotent:** a repeated webhook finds the order no longer pending and changes nothing.
+- `recordPaymentFailure()` marks payment failed, keeps the order pending so the shopper can retry, and notifies staff. (A checkout session that expires or fails asynchronously instead cancels the order outright, releasing its reservation — see docs/INVENTORY_RESERVATION.md.)
+- **The storefront cannot create a paid order.** Only staff (for in-person sales) or the webhook can.
+- `refundOrder(orderId, { amountCents, reason })` (`lib/orders/refunds.ts`) is the new partial-refund path — see docs/ORDER_LIFECYCLE.md for how it differs from the full-refund-via-cancellation path above.
 
 ### Status changes (`updateOrderStatus`)
 
@@ -62,6 +67,14 @@ Allowed transitions: pending → paid | cancelled · paid → processing | cance
 | paid/processing → cancelled, or → refunded | **RETURN** movement per line (unless `restock: false`) | `refund_total = subtotal − discount`. `cost_total` becomes 0 if restocked; otherwise the cost stays and the loss shows. `gross_profit` and `gross_margin` are recomputed. A `refunds` row is written. |
 
 Every change writes `order_events`, an audit entry, and an event. Refunds also notify staff. Refunds are currently **full** refunds of the merchandise; partial refunds are planned (see the report).
+
+**Phase 5 correction**: `→ refunded` used to also coerce `fulfillment_status` to `returned`/`cancelled`
+via `statusFields()`. Since Phase 5 made `fulfillment_status` an operationally meaningful field (it drives
+packages, the customer tracking timeline, and admin queues), that side effect was actively harmful — a
+refund is a money event and shouldn't overwrite real fulfillment history. Fixed so a refund only touches
+`fulfillment_status` if nothing had happened yet (still `unfulfilled`); see docs/ORDER_STATUS.md and
+docs/FULFILLMENT.md, docs/SHIPPING.md and docs/RETURNS.md for the fulfillment/shipping/returns systems
+this section's `updateOrderStatus`/`refundOrder` now interact with.
 
 ## 3. Inventory (`inventory/service.ts`)
 

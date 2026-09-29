@@ -11,6 +11,7 @@ import { inventory, inventoryMovements, productVariants, products, suppliers } f
 import { InsufficientStockError, NotFoundError, ValidationError } from "../errors";
 import { type Actor, assertCan } from "../auth/permissions";
 import { audit, emit, notify } from "../audit";
+import { notifyBackInStock } from "./stock-notifications";
 
 export type MovementType = typeof inventoryMovements.$inferInsert["movementType"];
 export type ReferenceType = NonNullable<typeof inventoryMovements.$inferInsert["referenceType"]>;
@@ -69,7 +70,9 @@ export async function applyMovement(tx: Tx, row: LockedRow, m: MoveInput) {
     referenceType: m.referenceType ?? null, referenceId: m.referenceId ?? null, orderId: m.orderId ?? null, supplierId: m.supplierId ?? null,
     unitCostCents: m.unitCostCents ?? null, notes: m.notes ?? null, userId: m.userId ?? null, ...(m.at ? { createdAt: m.at } : {}),
   });
-  await raiseStockAlerts(tx, row, stockBefore - row.reservedQuantity, stockAfter - reserved);
+  const availBefore = stockBefore - row.reservedQuantity, availAfter = stockAfter - reserved;
+  await raiseStockAlerts(tx, row, availBefore, availAfter);
+  if (availAfter > 0 && availBefore <= 0) await notifyBackInStock(tx, m.variantId);
   row.stockQuantity = stockAfter;
   row.reservedQuantity = reserved;
   await emit(tx, { type: "inventory.changed", variantId: m.variantId, stockAfter });

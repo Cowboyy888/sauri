@@ -18,15 +18,16 @@ import { cn } from "@/components/ui/cn";
 
 export const metadata = { title: "Orders" };
 const STATUSES = ["pending", "paid", "processing", "shipped", "delivered", "cancelled", "refunded"];
+const FULFILLMENT_STATUSES = ["unfulfilled", "processing", "picking", "packing", "ready_to_ship", "partially_shipped", "shipped", "in_transit", "delivered", "completed", "returned", "cancelled"];
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const g = await guard("orders:read");
   if (!g.ok) return <AccessDenied role={g.staff.role} permission={g.permission} />;
   const sp = await searchParams, db = getDb(), parsed = parseRange(sp), r = await resolveRange(db, parsed.key, parsed.custom);
   const { page, pageSize } = pageParams(sp);
-  const params = { q: one(sp.q), status: one(sp.status), payment: one(sp.payment), channel: one(sp.channel), customer: one(sp.customer), sort: one(sp.sort), dir: one(sp.dir), range: one(sp.range), from: one(sp.from), to: one(sp.to) };
+  const params = { q: one(sp.q), status: one(sp.status), payment: one(sp.payment), fulfillment: one(sp.fulfillment), channel: one(sp.channel), customer: one(sp.customer), sort: one(sp.sort), dir: one(sp.dir), range: one(sp.range), from: one(sp.from), to: one(sp.to) };
   const res = await safe("orders", async () => ({
-    list: await listOrders(db, { q: params.q, status: params.status, paymentStatus: params.payment, channel: params.channel, customerId: params.customer && /^[0-9a-f-]{36}$/.test(params.customer) ? params.customer : undefined, range: r, sort: params.sort, dir: params.dir, page, pageSize }),
+    list: await listOrders(db, { q: params.q, status: params.status, paymentStatus: params.payment, fulfillmentStatus: params.fulfillment, channel: params.channel, customerId: params.customer && /^[0-9a-f-]{36}$/.test(params.customer) ? params.customer : undefined, range: r, sort: params.sort, dir: params.dir, page, pageSize }),
     channels: await listChannels(db),
   }), one(sp.fail));
   return (
@@ -37,6 +38,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <SearchInput placeholder="Search order number, customer name or email" />
           <FilterSelect param="status" label="Status" options={STATUSES.map((s) => ({ value: s, label: s[0]!.toUpperCase() + s.slice(1) }))} />
           <FilterSelect param="payment" label="Payment" options={[["unpaid", "Unpaid"], ["paid", "Paid"], ["refunded", "Refunded"], ["failed", "Failed"]].map(([value, label]) => ({ value: value!, label: label! }))} />
+          <FilterSelect param="fulfillment" label="Fulfillment" options={FULFILLMENT_STATUSES.map((s) => ({ value: s, label: s.split("_").map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" ") }))} />
           {res.ok && <FilterSelect param="channel" label="Channel" options={res.data.channels.map((c) => ({ value: c.code, label: c.name }))} />}
           {params.customer && <Link href={`/admin/orders`} className="rounded-md bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent">One customer · clear</Link>}
         </FilterBar>

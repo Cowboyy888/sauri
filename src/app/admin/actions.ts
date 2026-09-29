@@ -16,8 +16,19 @@ import type { Permission } from "@/lib/auth/permissions";
 import { BusinessError } from "@/lib/errors";
 import { adjustStock, restock, setReorderLevel } from "@/lib/inventory/service";
 import { updateOrderStatus } from "@/lib/orders/service";
+import { addOrderNote, setTracking } from "@/lib/orders/fulfillment";
+import { refundOrder } from "@/lib/orders/refunds";
+import { advanceFulfillmentStage, createPackage, setPickStatus, setPackageStatus, markCompleted } from "@/lib/fulfillment/service";
+import { updateReturnStatus, recordInspection, refundReturn, requestReturnInfo, setReturnShipping, setReturnPolicy } from "@/lib/returns/service";
+import { createShippingMethod, updateShippingMethod, setShippingMethodActive } from "@/lib/admin/shipping-methods";
 import { createDiscount, setDiscountActive } from "@/lib/discounts/service";
-import { addProductImage, addStaff, addVariant, createProduct, deleteProduct, duplicateProduct, removeProductImage, setProductArchived, setReviewStatus, updateContent, updateProduct, updateStaff, updateVariant } from "@/lib/catalog/service";
+import { addProductImage, addStaff, addVariant, createProduct, deleteProduct, duplicateProduct, removeProductImage, setProductArchived, updateContent, updateProduct, updateStaff, updateVariant } from "@/lib/catalog/service";
+import { moderateReview } from "@/lib/reviews/service";
+import {
+  addNote, anonymizeCustomer, assignTag, createTag, logCommunication, mergeCustomers, unassignTag,
+} from "@/lib/crm/customer-management";
+import { setCrmSettings } from "@/lib/crm/segments";
+import { adjustPoints, saveReward, saveTier, setLoyaltySettings } from "@/lib/loyalty/service";
 
 export type ActionResult<T = undefined> = { ok: true; message?: string; data?: T } | { ok: false; error: string };
 
@@ -63,6 +74,171 @@ export async function adjustStockAction(input: z.input<typeof Adjust>) {
 const Status = z.object({ orderId: uuid, status: z.enum(["processing", "shipped", "delivered", "cancelled", "refunded"]), reason: z.string().trim().max(500).optional(), restock: z.boolean().optional() });
 export async function updateOrderStatusAction(input: z.input<typeof Status>) {
   return act("orders:write", async (actor) => { const v = Status.parse(input); await updateOrderStatus(getDb(), actor, v.orderId, v.status, { reason: v.reason || undefined, restock: v.restock }); }, "Order updated");
+}
+const Tracking = z.object({ orderId: uuid, trackingNumber: z.string().trim().min(1, "Enter a tracking number.").max(80), carrier: z.string().trim().max(60).optional() });
+export async function setTrackingAction(input: z.input<typeof Tracking>) {
+  return act("orders:write", async (actor) => { const v = Tracking.parse(input); await setTracking(getDb(), actor, v.orderId, v); }, "Tracking added");
+}
+const Note = z.object({ orderId: uuid, note: z.string().trim().min(1, "Enter a note.").max(2000) });
+export async function addOrderNoteAction(input: z.input<typeof Note>) {
+  return act("orders:write", async (actor) => { const v = Note.parse(input); await addOrderNote(getDb(), actor, v.orderId, v.note); }, "Note added");
+}
+const Refund = z.object({ orderId: uuid, amount: dollars("Refund amount"), reason: z.string().trim().max(500).optional() });
+export async function refundOrderAction(input: z.input<typeof Refund>) {
+  return act("orders:write", async (actor) => {
+    const v = Refund.parse(input);
+    return refundOrder(getDb(), actor, v.orderId, { amountCents: v.amount, reason: v.reason || undefined });
+  }, "Refund processed");
+}
+
+/* ---------------- fulfillment (Phase 5) ---------------- */
+const Stage = z.object({ orderId: uuid, next: z.enum(["processing", "picking", "packing", "ready_to_ship"]), notes: z.string().trim().max(500).optional() });
+export async function advanceFulfillmentStageAction(input: z.input<typeof Stage>) {
+  return act("inventory:write", async (actor) => { const v = Stage.parse(input); await advanceFulfillmentStage(getDb(), actor, v.orderId, v.next, v.notes || undefined); }, "Stage updated");
+}
+const Pick = z.object({ orderItemId: uuid, status: z.enum(["picked", "missing", "damaged"]), pickedQuantity: z.coerce.number().int().min(0).optional() });
+export async function setPickStatusAction(input: z.input<typeof Pick>) {
+  return act("inventory:write", async (actor) => { const v = Pick.parse(input); await setPickStatus(getDb(), actor, v.orderItemId, v.status, v.pickedQuantity); }, "Pick status updated");
+}
+const NewPackage = z.object({
+  orderId: uuid, items: z.array(z.object({ orderItemId: uuid, quantity: z.coerce.number().int().min(1) })).min(1, "Add at least one item."),
+  weightGrams: z.coerce.number().min(0).optional(), lengthMm: z.coerce.number().min(0).optional(), widthMm: z.coerce.number().min(0).optional(), heightMm: z.coerce.number().min(0).optional(),
+  carrier: z.string().trim().max(60).optional(), service: z.string().trim().max(60).optional(), trackingNumber: z.string().trim().max(80).optional(), trackingUrl: z.string().trim().max(500).optional(), labelUrl: z.string().trim().max(500).optional(),
+});
+export async function createPackageAction(input: z.input<typeof NewPackage>) {
+  return act("inventory:write", async (actor) => {
+    const v = NewPackage.parse(input);
+    const p = await createPackage(getDb(), actor, v.orderId, v);
+    return { id: p.id };
+  }, "Package created");
+}
+const PkgStatus = z.object({ packageId: uuid, status: z.enum(["label_created", "ready_to_ship", "shipped", "in_transit", "out_for_delivery", "delivered", "delivery_failed", "return_to_sender"]), note: z.string().trim().max(500).optional() });
+export async function setPackageStatusAction(input: z.input<typeof PkgStatus>) {
+  return act("inventory:write", async (actor) => { const v = PkgStatus.parse(input); await setPackageStatus(getDb(), actor, v.packageId, v.status, v.note || undefined); }, "Package status updated");
+}
+export async function markOrderCompletedAction(orderId: string) {
+  return act("orders:write", async (actor) => { await markCompleted(getDb(), actor, uuid.parse(orderId)); }, "Order marked completed");
+}
+
+/* ---------------- returns (Phase 5) ---------------- */
+const ReturnStatus = z.object({ returnRequestId: uuid, next: z.enum(["under_review", "approved", "rejected", "return_shipped", "received", "inspecting", "approved_for_refund", "closed"]), note: z.string().trim().max(500).optional() });
+export async function updateReturnStatusAction(input: z.input<typeof ReturnStatus>) {
+  return act("orders:write", async (actor) => { const v = ReturnStatus.parse(input); await updateReturnStatus(getDb(), actor, v.returnRequestId, v.next, v.note || undefined); }, "Return updated");
+}
+const ReturnInfo = z.object({ returnRequestId: uuid, note: z.string().trim().min(1, "Enter what's needed.").max(1000) });
+export async function requestReturnInfoAction(input: z.input<typeof ReturnInfo>) {
+  return act("orders:write", async (actor) => { const v = ReturnInfo.parse(input); await requestReturnInfo(getDb(), actor, v.returnRequestId, v.note); }, "Requested more information");
+}
+const ReturnShip = z.object({ returnRequestId: uuid, trackingNumber: z.string().trim().max(80).optional(), carrier: z.string().trim().max(60).optional() });
+export async function setReturnShippingAction(input: z.input<typeof ReturnShip>) {
+  return act("orders:write", async (actor) => { const v = ReturnShip.parse(input); await setReturnShipping(getDb(), actor, v.returnRequestId, v); }, "Return tracking saved");
+}
+const Inspection = z.object({ returnItemId: uuid, condition: z.enum(["new", "like_new", "used", "damaged", "defective", "unsellable"]), disposition: z.enum(["restock", "repair", "damaged", "dispose", "return_to_customer"]), notes: z.string().trim().max(500).optional() });
+export async function recordInspectionAction(input: z.input<typeof Inspection>) {
+  return act("inventory:write", async (actor) => { const v = Inspection.parse(input); await recordInspection(getDb(), actor, v.returnItemId, v); }, "Inspection recorded");
+}
+export async function refundReturnAction(returnRequestId: string) {
+  return act("orders:write", async (actor) => { await refundReturn(getDb(), actor, uuid.parse(returnRequestId)); }, "Refund processed");
+}
+
+/* ---------------- settings: shipping methods & return policy (Phase 5) ---------------- */
+const ShipMethod = z.object({
+  id: uuid.optional(), name: z.string().trim().min(1, "Enter a name.").max(80), description: z.string().trim().max(300).optional(),
+  price: dollars("Price"), estimatedMinDays: z.coerce.number().int().min(0).max(90), estimatedMaxDays: z.coerce.number().int().min(0).max(90),
+  waivableAboveThreshold: z.boolean().optional(), carrierCost: optDollars("Carrier cost"),
+  countryCode: z.string().trim().max(2).optional(), region: z.string().trim().max(60).optional(), minOrder: optDollars("Minimum order"), maxOrder: optDollars("Maximum order"), active: z.boolean().optional(),
+});
+export async function saveShippingMethodAction(input: z.input<typeof ShipMethod>) {
+  return act("settings:write", async (actor) => {
+    const v = ShipMethod.parse(input);
+    const payload = { name: v.name, description: v.description, priceCents: v.price, estimatedMinDays: v.estimatedMinDays, estimatedMaxDays: v.estimatedMaxDays, waivableAboveThreshold: v.waivableAboveThreshold, carrierCostCents: v.carrierCost ?? undefined, countryCode: v.countryCode?.toUpperCase() || null, region: v.region || null, minOrderCents: v.minOrder, maxOrderCents: v.maxOrder, active: v.active };
+    if (v.id) await updateShippingMethod(getDb(), actor, v.id, payload); else await createShippingMethod(getDb(), actor, payload);
+  }, "Shipping method saved");
+}
+export async function toggleShippingMethodAction(id: string, active: boolean) {
+  return act("settings:write", async (actor) => { await setShippingMethodActive(getDb(), actor, uuid.parse(id), active); }, active ? "Method activated" : "Method deactivated");
+}
+const ReturnPolicy = z.object({
+  returnWindowDays: z.coerce.number().int().min(0).max(365), exchangeEnabled: z.boolean(), refundEnabled: z.boolean(),
+  returnShippingPolicy: z.enum(["customer", "company", "free"]), finalSaleTags: z.string().optional(), eligibleCategorySlugs: z.string().optional(),
+});
+export async function setReturnPolicyAction(input: z.input<typeof ReturnPolicy>) {
+  return act("settings:write", async (actor) => {
+    const v = ReturnPolicy.parse(input);
+    await setReturnPolicy(getDb(), actor, {
+      returnWindowDays: v.returnWindowDays, exchangeEnabled: v.exchangeEnabled, refundEnabled: v.refundEnabled, returnShippingPolicy: v.returnShippingPolicy,
+      finalSaleTags: (v.finalSaleTags ?? "").split(",").map((t) => t.trim()).filter(Boolean),
+      eligibleCategorySlugs: v.eligibleCategorySlugs?.trim() ? v.eligibleCategorySlugs.split(",").map((t) => t.trim()).filter(Boolean) : null,
+    });
+  }, "Return policy saved");
+}
+
+/* ---------------- CRM: tags, notes, communications (Phase 6) ---------------- */
+const NewTag = z.object({ name: z.string().trim().min(1, "Enter a tag name.").max(40), color: z.string().trim().max(20).optional() });
+export async function createTagAction(input: z.input<typeof NewTag>) {
+  return act("customers:write", async (actor) => { const v = NewTag.parse(input); await createTag(getDb(), actor, v.name, v.color); }, "Tag created");
+}
+export async function assignTagAction(customerId: string, tagId: string) {
+  return act("customers:write", async (actor) => { await assignTag(getDb(), actor, uuid.parse(customerId), uuid.parse(tagId)); }, "Tag added");
+}
+export async function unassignTagAction(customerId: string, tagId: string) {
+  return act("customers:write", async (actor) => { await unassignTag(getDb(), actor, uuid.parse(customerId), uuid.parse(tagId)); }, "Tag removed");
+}
+const NewNote = z.object({ customerId: uuid, note: z.string().trim().min(1, "Enter a note.").max(2000) });
+export async function addCustomerNoteAction(input: z.input<typeof NewNote>) {
+  return act("customers:write", async (actor) => { const v = NewNote.parse(input); await addNote(getDb(), actor, v.customerId, v.note); }, "Note added");
+}
+const NewComm = z.object({ customerId: uuid, type: z.enum(["email", "sms", "call", "whatsapp", "telegram", "note"]), subject: z.string().trim().max(200).optional(), message: z.string().trim().min(1, "Enter a message.").max(4000) });
+export async function logCommunicationAction(input: z.input<typeof NewComm>) {
+  return act("customers:write", async (actor) => { const v = NewComm.parse(input); await logCommunication(getDb(), actor, v.customerId, v); }, "Logged");
+}
+const Merge = z.object({ survivorId: uuid, loserId: uuid });
+export async function mergeCustomersAction(input: z.input<typeof Merge>) {
+  return act("customers:write", async (actor) => { const v = Merge.parse(input); await mergeCustomers(getDb(), actor, v.survivorId, v.loserId); }, "Customers merged");
+}
+export async function anonymizeCustomerAction(customerId: string) {
+  return act("customers:write", async (actor) => { await anonymizeCustomer(getDb(), actor, uuid.parse(customerId)); }, "Customer anonymized");
+}
+const CrmSettings = z.object({
+  newCustomerDays: z.coerce.number().int().min(0), inactiveDays: z.coerce.number().int().min(0), highValueThresholdCents: z.coerce.number().int().min(0),
+  recentPurchaserDays: z.coerce.number().int().min(0), frequentBuyerDays: z.coerce.number().int().min(0), frequentBuyerMinOrders: z.coerce.number().int().min(1),
+  recencyRecentMaxDays: z.coerce.number().int().min(0), recencyAtRiskMinDays: z.coerce.number().int().min(0), recencyInactiveMinDays: z.coerce.number().int().min(0),
+  frequencyFrequentMinOrders: z.coerce.number().int().min(1), monetaryHighValueCents: z.coerce.number().int().min(0),
+});
+export async function setCrmSettingsAction(input: z.input<typeof CrmSettings>) {
+  return act("customers:write", async (actor) => {
+    const v = CrmSettings.parse(input);
+    await setCrmSettings(getDb(), actor, {
+      newCustomerDays: v.newCustomerDays, inactiveDays: v.inactiveDays, highValueThresholdCents: v.highValueThresholdCents, recentPurchaserDays: v.recentPurchaserDays,
+      frequentBuyerDays: v.frequentBuyerDays, frequentBuyerMinOrders: v.frequentBuyerMinOrders,
+      rfm: { recencyRecentMaxDays: v.recencyRecentMaxDays, recencyAtRiskMinDays: v.recencyAtRiskMinDays, recencyInactiveMinDays: v.recencyInactiveMinDays, frequencyFrequentMinOrders: v.frequencyFrequentMinOrders, monetaryHighValueCents: v.monetaryHighValueCents },
+    });
+  }, "CRM settings saved");
+}
+
+/* ---------------- loyalty (Phase 6) ---------------- */
+const AdjustPoints = z.object({ customerId: uuid, points: z.coerce.number().int(), reason: z.string().trim().min(1, "Enter a reason.").max(500) });
+export async function adjustPointsAction(input: z.input<typeof AdjustPoints>) {
+  return act("loyalty:write", async (actor) => { const v = AdjustPoints.parse(input); await adjustPoints(getDb(), actor, v.customerId, v.points, v.reason); }, "Points adjusted");
+}
+const TierInput = z.object({ id: uuid.optional(), name: z.string().trim().min(1).max(60), minSpend: dollars("Minimum spend"), bonusPointsMultiplier: z.coerce.number().min(1).max(10).optional(), earlyAccess: z.boolean().optional(), freeShipping: z.boolean().optional(), active: z.boolean().optional() });
+export async function saveTierAction(input: z.input<typeof TierInput>) {
+  return act("loyalty:write", async (actor) => {
+    const v = TierInput.parse(input);
+    await saveTier(getDb(), actor, v.id, { name: v.name, minSpendCents: v.minSpend, benefits: { bonusPointsMultiplier: v.bonusPointsMultiplier, earlyAccess: v.earlyAccess, freeShipping: v.freeShipping }, active: v.active });
+  }, "Tier saved");
+}
+const RewardInput = z.object({ id: uuid.optional(), name: z.string().trim().min(1).max(80), description: z.string().trim().max(300).optional(), pointsCost: z.coerce.number().int().min(1), rewardType: z.enum(["percent", "fixed", "free_shipping"]), rewardValue: z.coerce.number().min(0), active: z.boolean().optional() });
+export async function saveRewardAction(input: z.input<typeof RewardInput>) {
+  return act("loyalty:write", async (actor) => {
+    const v = RewardInput.parse(input);
+    const rewardValue = v.rewardType === "fixed" ? Math.round(v.rewardValue * 100) : Math.round(v.rewardValue);
+    await saveReward(getDb(), actor, v.id, { name: v.name, description: v.description, pointsCost: v.pointsCost, rewardType: v.rewardType, rewardValue });
+  }, "Reward saved");
+}
+const LoyaltySettings = z.object({ enabled: z.boolean(), pointsPerDollar: z.coerce.number().min(0).max(1000) });
+export async function setLoyaltySettingsAction(input: z.input<typeof LoyaltySettings>) {
+  return act("loyalty:write", async (actor) => { const v = LoyaltySettings.parse(input); await setLoyaltySettings(getDb(), actor, v); }, "Loyalty settings saved");
 }
 
 /* ---------------- products ---------------- */
@@ -115,7 +291,11 @@ export async function addImageAction(productId: string, url: string, alt: string
 export async function removeImageAction(imageId: string) { return act("products:write", async (actor) => { await removeProductImage(getDb(), actor, uuid.parse(imageId)); }, "Image removed"); }
 
 /* ---------------- reviews, content, discounts, staff ---------------- */
-export async function setReviewStatusAction(id: string, status: "published" | "hidden") { return act("reviews:write", async (actor) => { await setReviewStatus(getDb(), actor, uuid.parse(id), z.enum(["published", "hidden"]).parse(status)); }, status === "published" ? "Review published" : "Review hidden"); }
+const ReviewLabel: Record<string, string> = { published: "Review published", rejected: "Review rejected", hidden: "Review hidden" };
+export async function setReviewStatusAction(id: string, status: "published" | "rejected" | "hidden", note?: string) {
+  const next = z.enum(["published", "rejected", "hidden"]).parse(status);
+  return act("reviews:write", async (actor) => { await moderateReview(getDb(), actor, uuid.parse(id), next, note); }, ReviewLabel[next]);
+}
 const Content = z.object({ announce: z.string().max(120), heroTitle: z.string().max(60), heroLede: z.string().max(300) });
 export async function updateContentAction(input: z.input<typeof Content>) { return act("content:write", async (actor) => { await updateContent(getDb(), actor, Content.parse(input)); }, "Content published"); }
 const Disc = z.object({ code: z.string().trim().min(3).max(20), type: z.enum(["percent", "fixed", "free_shipping"]), value: z.coerce.number().min(0).max(100_000), categoryId: z.union([z.literal(""), uuid]).optional(), minSubtotal: optDollars("Minimum order"), maxDiscount: optDollars("Maximum discount"), startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), endsAt: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(), usageLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional(), perCustomerLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional() });

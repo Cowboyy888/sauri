@@ -9,7 +9,7 @@ import { AccessDenied } from "@/components/admin/access-denied";
 import { RefreshControl } from "@/components/admin/live";
 import { CardSkeleton, KpiSkeleton } from "@/components/admin/skeleton";
 import {
-  CategorySection, ChannelSection, InventorySummarySection, KpiSection, LowStockSection, OutOfStockSection, ProfitSection, RecentOrdersSection,
+  CategorySection, ChannelSection, FulfillmentKpiSection, InventorySummarySection, KpiSection, LowStockSection, OutOfStockSection, ProfitSection, RecentOrdersSection,
   RevenueBreakdownSection, SalesOverviewSection, TopProductsSection,
 } from "@/components/admin/dashboard/sections";
 
@@ -33,6 +33,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* Mobile order (brief §45): KPIs, stock alerts and recent orders first; charts after. Desktop: analytic flow. */}
       <div className="flex min-w-0 flex-col gap-4">
         <div className="order-1"><Suspense key={`k${k}`} fallback={<KpiSkeleton />}><KpiSection {...ctx} /></Suspense></div>
+        {ctx.canWriteInventory && <div className="order-1"><Suspense fallback={<KpiSkeleton />}><FulfillmentKpiSection {...ctx} /></Suspense></div>}
         <div className="order-5 lg:order-2"><Suspense key={`c${k}`} fallback={<CardSkeleton chart />}><SalesOverviewSection {...ctx} rangeText={text} /></Suspense></div>
         <div className="order-6 grid gap-4 lg:order-3 lg:grid-cols-2">
           <Suspense key={`b${k}`} fallback={<CardSkeleton rows={8} />}><RevenueBreakdownSection {...ctx} /></Suspense>

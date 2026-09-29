@@ -9,7 +9,7 @@ export type OrderListRow = {
   items: number; paymentStatus: string; status: string; fulfillmentStatus: string; totalCents: number; grossProfitCents: number; grossMargin: number;
 };
 
-export async function listOrders(db: DbOrTx, o: { q?: string; status?: string; paymentStatus?: string; channel?: string; customerId?: string; range?: Range; sort?: string; dir?: string; page: number; pageSize: number }): Promise<Page<OrderListRow>> {
+export async function listOrders(db: DbOrTx, o: { q?: string; status?: string; paymentStatus?: string; fulfillmentStatus?: string; channel?: string; customerId?: string; range?: Range; sort?: string; dir?: string; page: number; pageSize: number }): Promise<Page<OrderListRow>> {
   const q = o.q?.trim();
   const res = await rows<Record<string, string | null>>(db, sql`
     select o.id, o.order_number, o.customer_id, c.name as customer, c.email, o.placed_at, sc.name as channel, sc.code as channel_code,
@@ -20,6 +20,7 @@ export async function listOrders(db: DbOrTx, o: { q?: string; status?: string; p
       ${q ? sql`and (o.order_number ilike ${like(q)} or c.name ilike ${like(q)} or c.email ilike ${like(q)})` : sql``}
       ${o.status ? sql`and o.status = ${o.status}` : sql``}
       ${o.paymentStatus ? sql`and o.payment_status = ${o.paymentStatus}` : sql``}
+      ${o.fulfillmentStatus ? sql`and o.fulfillment_status = ${o.fulfillmentStatus}` : sql``}
       ${o.channel ? sql`and sc.code = ${o.channel}` : sql``}
       ${o.customerId ? sql`and o.customer_id = ${o.customerId}` : sql``}
       ${o.range ? sql`and o.placed_at >= ${o.range.from.toISOString()} and o.placed_at < ${o.range.to.toISOString()}` : sql``}
@@ -38,8 +39,10 @@ export async function getOrder(db: DbOrTx, id: string) {
   const [o] = await db.select().from(orders).where(eq(orders.id, id));
   if (!o) return null;
   const [meta, items, events, payments, refunds, movements] = await Promise.all([
-    rows<Record<string, string>>(db, sql`select c.id as customer_id, c.name, c.email, c.phone, sc.name as channel, sc.code as channel_code, cs.total_orders, cs.total_spent_cents
-      from customers c join sales_channels sc on sc.id = ${o.channelId} join customer_stats cs on cs.customer_id = c.id where c.id = ${o.customerId}`),
+    rows<Record<string, string>>(db, sql`select c.id as customer_id, c.name, c.email, c.phone, sc.name as channel, sc.code as channel_code, cs.total_orders, cs.total_spent_cents, sm.name as shipping_method_name
+      from customers c join sales_channels sc on sc.id = ${o.channelId} join customer_stats cs on cs.customer_id = c.id
+      left join shipping_methods sm on sm.id = ${o.shippingMethodId ?? null}
+      where c.id = ${o.customerId}`),
     rows<Record<string, unknown>>(db, sql`select i.*, v.material, ${variantImage("i.product_id", "v.material")} as image from order_items i join product_variants v on v.id = i.variant_id where i.order_id = ${id} order by i.created_at, i.sku_snapshot`),
     rows<Record<string, string | null>>(db, sql`select e.status, e.note, e.created_at, u.name as user_name from order_events e left join users u on u.id = e.user_id where e.order_id = ${id} order by e.created_at, e.id`),
     rows<Record<string, string | null>>(db, sql`select provider, provider_ref, status, amount_cents, fee_cents, created_at from payments where order_id = ${id} order by created_at`),
@@ -52,6 +55,7 @@ export async function getOrder(db: DbOrTx, id: string) {
     order: o,
     customer: { id: c.customer_id!, name: c.name!, email: c.email!, phone: c.phone ?? null, totalOrders: n(c.total_orders), totalSpentCents: n(c.total_spent_cents) },
     channel: { name: c.channel!, code: c.channel_code! },
+    shippingMethodName: c.shipping_method_name ?? null,
     items: items.map((i) => ({
       id: String(i.id), productId: String(i.product_id), variantId: String(i.variant_id), name: String(i.product_name_snapshot), sku: String(i.sku_snapshot),
       variant: (i.variant_snapshot as { label: string }).label, image: (i.image as string | null) ?? null, quantity: n(i.quantity),

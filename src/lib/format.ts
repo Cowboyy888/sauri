@@ -6,6 +6,8 @@ export const money = (cents: number) => usd.format(cents / 100);
 export const moneyKpi = (cents: number) => (Math.abs(cents) >= 100_000 ? usd0.format(cents / 100) : usd.format(cents / 100));
 export const moneyAxis = (cents: number) => { const d = cents / 100, a = Math.abs(d); return a >= 1e6 ? `$${(d / 1e6).toFixed(1)}M` : a >= 1e3 ? `$${(d / 1e3).toFixed(a >= 1e4 ? 0 : 1)}k` : `$${Math.round(d)}`; };
 export const int = (n: number) => n.toLocaleString("en-US");
+/** Hours as "18h" under a day, otherwise "2.3 days" — used for fulfillment/delivery time metrics. */
+export const duration = (hours: number) => (hours < 24 ? `${hours < 10 ? hours.toFixed(1) : Math.round(hours)}h` : `${(hours / 24).toFixed(1)} days`);
 export const pct = (n: number, digits = 1) => `${n.toFixed(digits)}%`;
 export const signedPct = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}%`;
 

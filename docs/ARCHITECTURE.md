@@ -38,7 +38,7 @@ The storefront and the dashboard call the same functions in `src/lib`. An order 
 | Auth | Supabase Auth (identity) + our `users` table (role) | Supabase verifies who you are. Our table decides what you may do. |
 | Validation | Zod at every route boundary (`.strict()`, so unknown fields are rejected) | A browser cannot send a price or a cost |
 | Styling / UI | Tailwind CSS 4; shadcn-style components on Radix primitives; Lucide icons; Recharts; IBM Plex Sans (bundled) | The shadcn CLI needs its registry, which was unreachable in the build environment, so the components were written in the same pattern by hand |
-| Payments | Stripe-ready: pending order + reservation, `markOrderPaid` for the webhook | The browser can never mark an order paid |
+| Payments | Stripe (Vercel Marketplace, test mode), Checkout Sessions (`ui_mode: "embedded_page"`) + webhook. Pending order + reservation, `markOrderPaid` for the webhook | The browser can never mark an order paid — see docs/PAYMENTS.md, docs/WEBHOOKS.md |
 | Realtime | `pg_notify('sauri_events', …)` on commit. Supabase Realtime subscriptions in Phase 2. | Dashboards refresh when an order lands |
 | Storage | Supabase Storage URLs in `product_images.url` | Images later; the schema is ready |
 | Tests | Vitest against a real Postgres database | Locks, constraints and RLS cannot be tested with mocks |
@@ -63,15 +63,26 @@ The Supabase JS client is used **only** for authentication (`@supabase/ssr`), ne
 ## Folder map
 
 ```
-src/app/                 pages and route handlers (thin); admin under src/app/admin/(console)
+src/app/                 pages and route handlers (thin); admin under src/app/admin/(console);
+                         storefront under src/app/(shop); /checkout, /api/webhooks/stripe, /api/cron/*
 src/components/admin     dashboard components (KPICard, SalesChart, DataTable, DateRangePicker, …)
+src/components/storefront storefront components (cart, checkout, product, account, layout)
 src/components/ui        shadcn-style primitives on Radix (button, field, card, dialog, menu)
-src/lib/admin            admin read models, reports, range handling, page guard
+src/lib/admin            admin read models, reports, range handling, page guard; Phase 5: fulfillment.ts, returns.ts, shipping-methods.ts
+src/lib/payments         Stripe client + checkout session creation (server-only)
+src/lib/storefront       storefront read models (catalog, account, wishlist, shipping)
+src/lib/fulfillment      Phase 5: stage advancement, picking, packages, shipment status, the fulfillment rollup
+src/lib/returns          Phase 5: return request → inspection → refund workflow, return policy
+src/lib/analytics        sales/products/customers/channels; Phase 5: shipping.ts, returns.ts; Phase 6: retention.ts, wishlist.ts
+src/lib/crm              Phase 6: tags, notes, communications, consent, segments, RFM, merge, anonymize
+src/lib/loyalty          Phase 6: points, tiers, rewards, redemption — reuses the discount engine
+src/lib/reviews          Phase 6: review submission/eligibility, moderation history
+src/lib/marketing        Phase 6: abandoned-cart tracking (signed-in customers only)
 src/lib/                 all business logic (server-only)
 src/middleware.ts        coarse sign-in gate + Supabase session refresh for /admin
-drizzle/                 SQL migrations (0000 schema, 0001 views + RLS)
+drizzle/                 SQL migrations (0000 schema, 0001 views + RLS, 0002 dashboard, 0003+ Phase 4: payment_events, shipping_methods, refund/tracking columns; 0007+0009+0010 Phase 5: fulfillment/shipping/returns tables + RLS)
 scripts/                 migrate, seed (+ data/catalog.json)
-tests/                   integration tests (real Postgres)
+tests/                   integration tests (real Postgres, real Stripe test mode)
 docs/                    this documentation
 ```
 
@@ -84,5 +95,8 @@ docs/                    this documentation
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | server + browser | public by design |
 | `AUTH_DEV_STAFF_EMAIL` | local only | acts as that staff member when Supabase is not configured; ignored in production |
 | `TEST_DATABASE_URL` | tests | database name must end in `_test`; wiped on every run |
+| `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | server / server+browser | test-mode keys, provisioned via Vercel Marketplace; see docs/PAYMENTS.md |
+| `STRIPE_WEBHOOK_SECRET` | server | from `stripe listen` (local) or the Stripe Dashboard webhook endpoint (production); see docs/WEBHOOKS.md |
+| `CRON_SECRET` | server | authorizes `/api/cron/release-reservations`; Vercel Cron sends it automatically once set |
 
 Without Supabase configured, `/admin` and `/api/admin/*` return **404 in production**. There is no way in.

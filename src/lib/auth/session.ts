@@ -76,3 +76,6 @@ export async function requireStaff(db: DbOrTx, permission: Permission): Promise<
   assertCan(actor, permission);
   return actor;
 }
+
+/** Raw identity (Supabase or the dev stand-in), with no staff/customer lookup. Used by lib/customer/session.ts. */
+export const getIdentity = () => resolver();

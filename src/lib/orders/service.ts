@@ -6,7 +6,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db, DbOrTx, Tx } from "../db/client";
 import {
-  categories, customers, inventory, orderEvents, orderItems, orders, payments, productVariants, products, refunds, salesChannels,
+  acquisitionSource, categories, customers, inventory, orderEvents, orderItems, orders, payments, productVariants, products, refunds, salesChannels, shippingMethods,
   type VariantSnapshot,
 } from "../db/schema";
 import { STORE } from "../config";
@@ -14,14 +14,16 @@ import { BusinessError, InsufficientStockError, NotFoundError, ValidationError }
 import { type Actor, STOREFRONT_ACTOR, assertCan } from "../auth/permissions";
 import { audit, emit, notify } from "../audit";
 import { formatMoney } from "../money";
-import { computeTotals, marginPct, type PricedLine, type Totals } from "./pricing";
+import { computeTotals, marginPct, type PricedLine, type ResolvedShippingMethod, type Totals } from "./pricing";
 import { consumeDiscount, validateDiscount, type DiscountRow } from "../discounts/service";
 import { applyMovement, lockInventory, release, reserve } from "../inventory/service";
+import { earnPointsForOrder, reversePointsForRefund } from "../loyalty/service";
+import { markCartRecovered } from "../marketing/abandoned-carts";
 
 type OrderRow = typeof orders.$inferSelect;
 export type OrderStatus = OrderRow["status"];
 export type CartLine = { variantId: string; quantity: number; personalization?: { initial?: string; engraving?: string } };
-export type QuoteInput = { lines: CartLine[]; discountCode?: string | null; channel?: string; express?: boolean; customerId?: string | null };
+export type QuoteInput = { lines: CartLine[]; discountCode?: string | null; channel?: string; express?: boolean; customerId?: string | null; shippingMethodId?: string | null };
 
 type LoadedLine = PricedLine & { variantId: string; sku: string; productName: string; snapshot: VariantSnapshot; available: number; personalization?: CartLine["personalization"] };
 export type Quote = Totals & { lines: LoadedLine[]; discount: DiscountRow | null; discountError: string | null; problems: string[] };
@@ -49,6 +51,22 @@ async function loadChannel(tx: DbOrTx, code: string) {
   const [c] = await tx.select().from(salesChannels).where(eq(salesChannels.code, code));
   if (!c || !c.active) throw new ValidationError(`Unknown sales channel "${code}".`);
   return c;
+}
+
+/** Never trust a shipping price from the browser — only the id. Also the server-side half of
+ *  `calculateShipping()` (brief §17): a method restricted to a country/region or an order-value band is
+ *  rejected here even if the browser somehow submitted its id. */
+async function loadShippingMethod(tx: DbOrTx, id: string | null | undefined, ctx?: { subtotalCents: number; countryCode?: string | null; region?: string | null }): Promise<ResolvedShippingMethod | null> {
+  if (!id) return null;
+  const [m] = await tx.select().from(shippingMethods).where(and(eq(shippingMethods.id, id), eq(shippingMethods.active, true)));
+  if (!m) throw new ValidationError("Choose a shipping method.");
+  if (ctx) {
+    if (m.countryCode && ctx.countryCode && m.countryCode !== ctx.countryCode) throw new ValidationError(`${m.name} is not available for this destination.`);
+    if (m.region && ctx.region && m.region !== ctx.region) throw new ValidationError(`${m.name} is not available for this destination.`);
+    if (m.minOrderCents != null && ctx.subtotalCents < m.minOrderCents) throw new ValidationError(`${m.name} requires a minimum order.`);
+    if (m.maxOrderCents != null && ctx.subtotalCents > m.maxOrderCents) throw new ValidationError(`${m.name} is not available for orders this large.`);
+  }
+  return { id: m.id, priceCents: m.priceCents, carrierCostCents: m.carrierCostCents, waivableAboveThreshold: m.waivableAboveThreshold };
 }
 
 async function priceLines(tx: DbOrTx, lines: CartLine[]) {
@@ -94,7 +112,8 @@ export async function quoteCart(db: DbOrTx, input: QuoteInput): Promise<Quote> {
     try { discount = await validateDiscount(db, input.discountCode, loaded, input.customerId ?? null); }
     catch (e) { if (e instanceof BusinessError) discountError = e.message; else throw e; }
   }
-  return { ...computeTotals(loaded, discount, channel, !!input.express), lines: loaded, discount, discountError, problems };
+  const shippingMethod = await loadShippingMethod(db, input.shippingMethodId);
+  return { ...computeTotals(loaded, discount, channel, !!input.express, shippingMethod), lines: loaded, discount, discountError, problems };
 }
 
 /* ------------------------------------------------------------ status model */
@@ -107,7 +126,10 @@ export function statusFields(next: OrderStatus, prev?: Pick<OrderRow, "fulfillme
     case "shipped": return { status: next, paymentStatus: "paid", fulfillmentStatus: "shipped" };
     case "delivered": return { status: next, paymentStatus: "paid", fulfillmentStatus: "delivered" };
     case "cancelled": return { status: next, paymentStatus: prev?.paidAt ? "refunded" : "unpaid", fulfillmentStatus: "cancelled" };
-    case "refunded": return { status: next, paymentStatus: "refunded", fulfillmentStatus: prev && ["shipped", "delivered"].includes(prev.fulfillmentStatus) ? "returned" : "cancelled" };
+    // A refund is a money-only event (brief §42) — it must never overwrite real fulfillment/return progress
+    // (Phase 5's own `return_requests.status` is the source of truth for "was this actually returned").
+    // Only downgrade fulfillment_status when nothing had actually started yet.
+    case "refunded": return { status: next, paymentStatus: "refunded", fulfillmentStatus: prev?.fulfillmentStatus && prev.fulfillmentStatus !== "unfulfilled" ? prev.fulfillmentStatus : "cancelled" };
   }
 }
 
@@ -124,6 +146,8 @@ export const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 /* ------------------------------------------------------------ place order */
 export type PlaceOrderInput = QuoteInput & {
   customer: { email: string; name: string; phone?: string };
+  /** First-touch is captured once and never overwritten; last-touch updates on every order (brief §8). */
+  acquisition?: { source: (typeof acquisitionSource.enumValues)[number]; details?: Record<string, string | undefined> };
   shippingAddress?: Record<string, string>;
   billingAddress?: Record<string, string>;
   notes?: string;
@@ -136,12 +160,17 @@ export type PlaceOrderInput = QuoteInput & {
   placedAt?: Date;
 };
 
-async function upsertCustomer(tx: Tx, c: PlaceOrderInput["customer"], at?: Date) {
+async function upsertCustomer(tx: Tx, c: PlaceOrderInput["customer"], at?: Date, acquisition?: PlaceOrderInput["acquisition"]) {
   const email = c.email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError("Enter a valid email address.");
   const name = c.name.trim() || email;
-  const [row] = await tx.insert(customers).values({ email, name, phone: c.phone ?? null, ...(at ? { createdAt: at, updatedAt: at } : {}) })
-    .onConflictDoUpdate({ target: customers.email, set: { name, updatedAt: new Date() } })
+  const [existing] = await tx.select({ id: customers.id, firstTouchSource: customers.firstTouchSource }).from(customers).where(eq(customers.email, email));
+  const touchFields = acquisition ? {
+    ...(!existing?.firstTouchSource ? { firstTouchSource: acquisition.source, firstTouchDetails: acquisition.details, firstVisitAt: at ?? new Date() } : {}),
+    lastTouchSource: acquisition.source, lastTouchDetails: acquisition.details,
+  } : {};
+  const [row] = await tx.insert(customers).values({ email, name, phone: c.phone ?? null, ...touchFields, ...(at ? { createdAt: at, updatedAt: at } : {}) })
+    .onConflictDoUpdate({ target: customers.email, set: { name, updatedAt: new Date(), ...touchFields } })
     .returning({ id: customers.id });
   return row!.id;
 }
@@ -160,21 +189,24 @@ export async function placeOrder(db: Db, input: PlaceOrderInput, actor: Actor = 
   return db.transaction(async (tx) => {
     const at = input.placedAt ?? new Date();
     const channel = await loadChannel(tx, input.channel ?? "WEBSITE");
-    const customerId = await upsertCustomer(tx, input.customer, input.placedAt);
+    const customerId = await upsertCustomer(tx, input.customer, input.placedAt, input.acquisition);
     const locked = await lockInventory(tx, lines.map((l) => l.variantId)); // lock first; everything read after is consistent
     const { loaded, problems } = await priceLines(tx, lines);
     if (problems.length) throw new InsufficientStockError(problems[0]!);
     const discount = input.discountCode ? await validateDiscount(tx, input.discountCode, loaded, customerId, at) : null;
-    const t = computeTotals(loaded, discount, channel, !!input.express);
+    const subtotalForShipping = loaded.reduce((a, l) => a + l.unitPriceCents * l.quantity, 0);
+    const shippingMethod = await loadShippingMethod(tx, input.shippingMethodId, { subtotalCents: subtotalForShipping, countryCode: input.shippingAddress?.country, region: input.shippingAddress?.state });
+    const t = computeTotals(loaded, discount, channel, !!input.express, shippingMethod);
 
     const [order] = await tx.insert(orders).values({
       customerId, channelId: channel.id, ...statusFields(status),
       subtotalCents: t.subtotalCents, discountTotalCents: t.discountTotalCents, shippingTotalCents: t.shippingTotalCents, taxTotalCents: t.taxTotalCents, totalCents: t.totalCents,
       costTotalCents: t.costTotalCents, grossProfitCents: t.grossProfitCents, grossMargin: t.grossMargin,
       paymentFeeCents: t.paymentFeeCents, shippingCostCents: t.shippingCostCents,
-      discountCode: discount?.code ?? null, expressShipping: !!input.express,
+      discountCode: discount?.code ?? null, expressShipping: !!input.express, shippingMethodId: shippingMethod?.id ?? null,
       shippingAddress: input.shippingAddress ?? null, billingAddress: input.billingAddress ?? input.shippingAddress ?? null, notes: input.notes ?? null,
       placedAt: at, paidAt: status === "paid" ? at : null, createdByUserId: actor.userId, createdAt: at, updatedAt: at,
+      reservationExpiresAt: status === "pending" ? new Date(at.getTime() + STORE.reservationMinutes * 60_000) : null,
     }).returning();
     if (!order) throw new Error("Order insert failed");
 
@@ -200,7 +232,7 @@ export async function placeOrder(db: Db, input: PlaceOrderInput, actor: Actor = 
       orderId: order.id, provider: input.paymentProvider ?? (channel.code === "WEBSITE" ? "stripe" : "manual"), providerRef: input.paymentRef ?? null,
       status: status === "paid" ? "succeeded" : "pending", amountCents: t.totalCents, feeCents: t.paymentFeeCents, createdAt: at,
     });
-    if (status === "paid") await announcePaid(tx, order, input.customer.name, channel.name);
+    if (status === "paid") { await announcePaid(tx, order, input.customer.name, channel.name); await earnPointsForOrder(tx, order); }
     if (actor.userId) await audit(tx, actor, "Created order", "order", order.orderNumber, undefined, { channel: channel.code, totalCents: t.totalCents });
     return order;
   });
@@ -233,6 +265,8 @@ export async function markOrderPaid(db: Db, orderId: string, payment: { provider
     const [c] = await tx.select({ name: customers.name }).from(customers).where(eq(customers.id, o.customerId));
     const [ch] = await tx.select({ name: salesChannels.name }).from(salesChannels).where(eq(salesChannels.id, o.channelId));
     await announcePaid(tx, o, c?.name ?? "", ch?.name ?? "");
+    await earnPointsForOrder(tx, o);
+    await markCartRecovered(tx, o.customerId, o.id);
     return { alreadyProcessed: false };
   });
 }
@@ -278,6 +312,7 @@ export async function updateOrderStatus(db: Db, actor: Actor, orderId: string, n
       if (refund > 0) await tx.insert(refunds).values({ orderId: o.id, paymentId: p?.id ?? null, amountCents: refund, reason: opts.reason ?? next, restocked: restock, userId: actor.userId });
       await tx.update(payments).set({ status: "refunded" }).where(and(eq(payments.orderId, o.id), eq(payments.status, "succeeded")));
       await notify(tx, "refund", `Refund issued ${o.orderNumber}`, `${formatMoney(refund)} refunded${restock ? ", items returned to stock" : ""}`, o.orderNumber);
+      if (refund > 0) await reversePointsForRefund(tx, o, refund);
     }
     await tx.update(orders).set(set).where(eq(orders.id, o.id));
     await tx.insert(orderEvents).values({ orderId: o.id, status: next, note: opts.reason ?? null, userId: actor.userId });

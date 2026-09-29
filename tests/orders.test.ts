@@ -91,7 +91,9 @@ describe("orders", () => {
     await updateOrderStatus(db, owner, o.id, "shipped");
     expect(await one(o.id)).toMatchObject({ status: "shipped", paymentStatus: "paid", fulfillmentStatus: "shipped" });
     await updateOrderStatus(db, owner, o.id, "refunded");
-    expect(await one(o.id)).toMatchObject({ status: "refunded", paymentStatus: "refunded", fulfillmentStatus: "returned" });
+    // A refund is a money-only event and must not overwrite real fulfillment progress (brief §42) —
+    // "shipped" is preserved rather than being coerced into a coarse "returned".
+    expect(await one(o.id)).toMatchObject({ status: "refunded", paymentStatus: "refunded", fulfillmentStatus: "shipped" });
     await expect(updateOrderStatus(db, owner, o.id, "delivered")).rejects.toThrow(/cannot become delivered/);
   });
 

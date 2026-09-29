@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "reviews_one_per_order_product_uq" ON "reviews" USING btree ("customer_id","order_id","product_id") WHERE "reviews"."customer_id" is not null and "reviews"."order_id" is not null;

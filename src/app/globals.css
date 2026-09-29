@@ -4,9 +4,16 @@
   /* storefront (Phase 3) */
   --color-ivory: #f3eee6;
   --color-paper: #fbfaf7;
+  --color-warm-white: #faf8f4;
   --color-ink: #23211e;
+  --color-charcoal: #3a362f;
+  --color-beige: #e9e1d3;
+  --color-beige-soft: #f1ebe0;
   --color-champagne: #b89c6c;
-  --font-display: "Bodoni Moda", Georgia, serif;
+  --color-metal: #cbb896;
+  --color-error: #a8402f;
+  --font-display: var(--font-display-loaded), Georgia, serif;
+  --font-sans: var(--font-sans-loaded), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   /* admin */
   --font-admin: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -37,6 +44,28 @@
 }
 .admin :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .admin .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+/* storefront */
+:focus-visible { outline: 2px solid var(--color-champagne); outline-offset: 2px; }
+.font-sans, body { font-family: var(--font-sans); }
+
+@keyframes shop-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.shop-reveal { animation: shop-fade-up .6s cubic-bezier(.22,.61,.36,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .shop-reveal { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+.shop-hairline { border-color: color-mix(in srgb, var(--color-ink) 12%, transparent); }
+
+.shop-sheet-overlay { opacity: 0; transition: opacity .25s ease; }
+.shop-sheet-overlay[data-state="open"] { opacity: 1; }
+.shop-sheet-content { transition: transform .3s cubic-bezier(.22,.61,.36,1); }
+.shop-sheet-content[data-side="right"] { transform: translateX(100%); }
+.shop-sheet-content[data-side="left"] { transform: translateX(-100%); }
+.shop-sheet-content[data-state="open"] { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) {
+  .shop-sheet-overlay, .shop-sheet-content { transition: none; }
+}
 
 @keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
 .skeleton { background: linear-gradient(90deg, #eeede9 0, #f6f5f2 50%, #eeede9 100%); background-size: 800px 100%; animation: shimmer 1.4s linear infinite; border-radius: 4px; }

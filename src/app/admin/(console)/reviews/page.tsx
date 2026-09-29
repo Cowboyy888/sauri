@@ -26,7 +26,7 @@ export default async function ReviewsPage({ searchParams }: { searchParams: Prom
     <div className="grid grid-cols-1 gap-4">
       <PageHeader title="Reviews" description="Pending reviews appear first. Only published reviews show on product pages." />
       <Card>
-        <FilterBar><FilterSelect param="status" label="Status" options={[{ value: "pending", label: "Pending" }, { value: "published", label: "Published" }, { value: "hidden", label: "Hidden" }]} /></FilterBar>
+        <FilterBar><FilterSelect param="status" label="Status" options={[{ value: "pending", label: "Pending" }, { value: "published", label: "Published" }, { value: "rejected", label: "Rejected" }, { value: "hidden", label: "Hidden" }]} /></FilterBar>
         {!res.ok ? <ErrorState message="Unable to load reviews." /> : !res.data.rows.length ? <EmptyState title="No reviews" /> : <>
           <ul className="divide-y divide-line-soft">{res.data.rows.map((r) => (
             <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">

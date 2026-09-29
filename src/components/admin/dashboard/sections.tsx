@@ -9,6 +9,8 @@ import { comparisonLabel, pctChange, type ParsedRange } from "@/lib/admin/range"
 import { getInventoryValue } from "@/lib/analytics/service";
 import { inventorySummary, inventoryValueBy, listSuppliers, lowStock, outOfStock } from "@/lib/admin/inventory";
 import { listOrders } from "@/lib/admin/orders";
+import { fulfillmentKpis } from "@/lib/admin/fulfillment";
+import { returnKpis } from "@/lib/admin/returns";
 import { safe } from "@/lib/admin/safe";
 import { dateShort, dateTime, int, money, moneyKpi, pct, relTime } from "@/lib/format";
 import { Card, CardBody, CardHeader } from "../../ui/card";
@@ -44,6 +46,23 @@ export async function KpiSection({ db, r, parsed, fail }: Ctx) {
       <KPICard label="Units sold" value={int(m.units)} change={pctChange(m.units, p.units)} comparison={cmp} />
       <KPICard label="New customers" value={int(m.newCustomers)} change={pctChange(m.newCustomers, p.newCustomers)} comparison={cmp} hint="First paid order in this period" />
       <KPICard label="Inventory value" value={moneyKpi(inv)} change={null} comparison="" note="Current position, not date-bound" hint="Available stock × cost price" href="/admin/inventory" />
+    </section>
+  );
+}
+
+/* Phase 5 §32: fulfillment queue depth + returns needing action, right on the dashboard. */
+export async function FulfillmentKpiSection({ db, fail, canWriteInventory }: Ctx) {
+  if (!canWriteInventory) return null;
+  const res = await safe("fulfillment", async () => ({ f: await fulfillmentKpis(db), r: await returnKpis(db) }), fail);
+  if (!res.ok) return <Err msg="Unable to load fulfillment data." />;
+  const { f, r } = res.data;
+  const needsAction = r.requested + r.received;
+  return (
+    <section aria-label="Fulfillment and returns" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <KPICard label="To process" value={int(f.processing)} change={null} comparison="" note="Paid orders" href="/admin/fulfillment" />
+      <KPICard label="Picking + packing" value={int(f.picking + f.packing)} change={null} comparison="" note="In progress" href="/admin/fulfillment" />
+      <KPICard label="Ready to ship" value={int(f.readyToShip + f.partiallyShipped)} change={null} comparison="" note="Awaiting a package" href="/admin/fulfillment" tone={f.readyToShip + f.partiallyShipped > 0 ? "warn" : undefined} />
+      <KPICard label="Returns needing action" value={int(needsAction)} change={null} comparison="" note="Requested or received" href="/admin/returns" tone={needsAction > 0 ? "warn" : undefined} />
     </section>
   );
 }

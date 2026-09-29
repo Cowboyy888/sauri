@@ -10,9 +10,22 @@ const MAP: Record<string, [string, Tone]> = {
   // order
   pending: ["Pending", "warn"], paid: ["Paid", "info"], processing: ["Processing", "info"], shipped: ["Shipped", "accent"], delivered: ["Delivered", "pos"], cancelled: ["Cancelled", "neutral"], refunded: ["Refunded", "neg"],
   // payment
-  unpaid: ["Unpaid", "warn"], failed: ["Failed", "neg"],
+  unpaid: ["Unpaid", "warn"], failed: ["Failed", "neg"], partially_refunded: ["Partially refunded", "warn"],
   // fulfillment
   unfulfilled: ["Unfulfilled", "neutral"], returned: ["Returned", "neg"],
+  picking: ["Picking", "info"], packing: ["Packing", "info"], ready_to_ship: ["Ready to ship", "accent"], partially_shipped: ["Partially shipped", "accent"], in_transit: ["In transit", "accent"], completed: ["Completed", "pos"],
+  // shipment (package)
+  label_created: ["Label created", "neutral"], out_for_delivery: ["Out for delivery", "accent"], delivery_failed: ["Delivery failed", "neg"], return_to_sender: ["Return to sender", "neg"],
+  // pick status
+  picked: ["Picked", "pos"], missing: ["Missing", "neg"],
+  // return status
+  requested: ["Requested", "warn"], under_review: ["Under review", "info"], approved: ["Approved", "pos"], rejected: ["Rejected", "neg"], return_shipped: ["Return shipped", "info"], received: ["Received", "info"], inspecting: ["Inspecting", "info"], approved_for_refund: ["Approved for refund", "pos"], closed: ["Closed", "neutral"],
+  // return condition / disposition
+  new: ["New", "pos"], like_new: ["Like new", "pos"], used: ["Used", "neutral"], damaged: ["Damaged", "neg"], defective: ["Defective", "neg"], unsellable: ["Unsellable", "neg"], restock: ["Restock", "pos"], repair: ["Repair", "warn"], dispose: ["Dispose", "neg"], return_to_customer: ["Return to customer", "neutral"],
+  // return reason
+  wrong_size: ["Wrong size", "neutral"], changed_mind: ["Changed mind", "neutral"], wrong_item: ["Wrong item", "neutral"], not_as_expected: ["Not as expected", "neutral"], other: ["Other", "neutral"],
+  // abandoned carts
+  abandoned: ["Abandoned", "warn"], recovered: ["Recovered", "pos"],
   // stock
   IN_STOCK: ["In stock", "pos"], LOW_STOCK: ["Low stock", "warn"], OUT_OF_STOCK: ["Out of stock", "neg"],
   // product / variant / review / discount

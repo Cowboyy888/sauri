@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_locations" ADD COLUMN "position" integer DEFAULT 0 NOT NULL;

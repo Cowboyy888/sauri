@@ -83,15 +83,23 @@ export async function buildReport(db: DbOrTx, key: ReportKey, r: Range): Promise
     }
     case "customers": {
       const res = await rows<Record<string, string | null>>(db, sql`
-        select s.name, s.email, s.customer_since, s.total_orders, s.total_spent_cents, s.gross_profit_cents, s.last_order_at,
-               count(o.id) as period_orders, coalesce(sum(o.subtotal_cents - o.discount_total_cents - o.refund_total_cents),0) as period_rev
-        from customer_stats s join orders o on o.customer_id = s.customer_id and o.paid_at >= ${r.from.toISOString()} and o.paid_at < ${r.to.toISOString()}
-        group by s.customer_id, s.name, s.email, s.customer_since, s.total_orders, s.total_spent_cents, s.gross_profit_cents, s.last_order_at order by period_rev desc`);
+        select s.name, s.email, c.phone, c.first_touch_source, s.customer_since, s.total_orders, s.total_spent_cents, s.gross_profit_cents, s.last_order_at,
+               count(o.id) as period_orders, coalesce(sum(o.subtotal_cents - o.discount_total_cents - o.refund_total_cents),0) as period_rev,
+               coalesce((select string_agg(t.name, ', ') from customer_tag_assignments a join customer_tags t on t.id = a.tag_id where a.customer_id = s.customer_id), '') as tags
+        from customer_stats s join customers c on c.id = s.customer_id join orders o on o.customer_id = s.customer_id and o.paid_at >= ${r.from.toISOString()} and o.paid_at < ${r.to.toISOString()}
+        where c.merged_into_customer_id is null
+        group by s.customer_id, s.name, s.email, c.phone, c.first_touch_source, s.customer_since, s.total_orders, s.total_spent_cents, s.gross_profit_cents, s.last_order_at order by period_rev desc`);
       return { ...meta, columns: [
-        { key: "customer", label: "Customer", type: "text" }, { key: "email", label: "Email", type: "text" }, { key: "period_orders", label: "Orders in period", type: "int" }, { key: "period_revenue", label: "Revenue in period", type: "money" },
+        { key: "customer", label: "Customer", type: "text" }, { key: "email", label: "Email", type: "text" }, { key: "phone", label: "Phone", type: "text" },
+        { key: "period_orders", label: "Orders in period", type: "int" }, { key: "period_revenue", label: "Revenue in period", type: "money" },
         { key: "lifetime_orders", label: "Lifetime orders", type: "int" }, { key: "lifetime_value", label: "Lifetime value", type: "money" }, { key: "lifetime_profit", label: "Lifetime profit", type: "money" },
-        { key: "last_order", label: "Last order", type: "date" }, { key: "since", label: "Customer since", type: "date" }],
-        rows: res.map((x) => ({ customer: x.name, email: x.email, period_orders: n(x.period_orders), period_revenue: cents(n(x.period_rev)), lifetime_orders: n(x.total_orders), lifetime_value: cents(n(x.total_spent_cents)), lifetime_profit: cents(n(x.gross_profit_cents)), last_order: x.last_order_at ? new Date(x.last_order_at).toISOString() : null, since: new Date(x.customer_since!).toISOString() })) };
+        { key: "last_order", label: "Last order", type: "date" }, { key: "since", label: "Customer since", type: "date" },
+        { key: "acquisition_source", label: "Acquisition source", type: "text" }, { key: "tags", label: "Tags", type: "text" }],
+        rows: res.map((x) => ({
+          customer: x.name, email: x.email, phone: x.phone ?? "", period_orders: n(x.period_orders), period_revenue: cents(n(x.period_rev)), lifetime_orders: n(x.total_orders),
+          lifetime_value: cents(n(x.total_spent_cents)), lifetime_profit: cents(n(x.gross_profit_cents)), last_order: x.last_order_at ? new Date(x.last_order_at).toISOString() : null,
+          since: new Date(x.customer_since!).toISOString(), acquisition_source: x.first_touch_source ?? "", tags: x.tags ?? "",
+        })) };
     }
     case "low-stock": {
       const [low, out] = await Promise.all([lowStock(db, 10_000), outOfStock(db, 10_000)]);

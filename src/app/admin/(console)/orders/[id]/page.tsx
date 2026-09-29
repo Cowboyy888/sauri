@@ -4,7 +4,10 @@ import { ChevronLeft } from "lucide-react";
 import { getDb } from "@/lib/db/client";
 import { guard } from "@/lib/admin/guard";
 import { getOrder } from "@/lib/admin/orders";
+import { getOrderFulfillmentDetail } from "@/lib/admin/fulfillment";
+import { listReturnsForOrder } from "@/lib/admin/returns";
 import { TRANSITIONS } from "@/lib/orders/service";
+import { STAGE_TRANSITIONS } from "@/lib/fulfillment/service";
 import { dateTimeFull, money, pct, titleCase } from "@/lib/format";
 import { PageHeader } from "@/components/admin/page-header";
 import { AccessDenied } from "@/components/admin/access-denied";
@@ -12,6 +15,8 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Thumb } from "@/components/admin/thumb";
 import { OrderStatusControl } from "@/components/admin/order-actions";
+import { OrderNotes, PartialRefundForm, TrackingForm } from "@/components/admin/order-fulfillment";
+import { CreatePackageButton, MarkCompletedButton, PackageCard, PickingList, StageControl } from "@/components/admin/fulfillment-panel";
 import { cn } from "@/components/ui/cn";
 
 export const metadata = { title: "Order" };
@@ -21,11 +26,21 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   if (!g.ok) return <AccessDenied role={g.staff.role} permission={g.permission} />;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const d = await getOrder(getDb(), id);
+  const db = getDb();
+  const d = await getOrder(db, id);
   if (!d) notFound();
   const { order: o, customer: c, items } = d;
+  const [fulfillment, returnRequests] = await Promise.all([getOrderFulfillmentDetail(db, id), listReturnsForOrder(db, id)]);
   const net = o.subtotalCents - o.discountTotalCents - o.refundTotalCents;
-  const next = TRANSITIONS[o.status].filter((s) => s !== "paid");
+  // Once the Phase 5 fulfillment workflow has started for this order, "shipped"/"delivered" can only be
+  // reached through packages — offering both would let staff race the package rollup and desync the two.
+  const usingFulfillmentWorkflow = o.fulfillmentStatus !== "unfulfilled";
+  const next = TRANSITIONS[o.status].filter((s) => s !== "paid" && !(usingFulfillmentWorkflow && (s === "shipped" || s === "delivered")));
+  const refundableCents = o.subtotalCents - o.discountTotalCents - o.refundTotalCents;
+  const canRefund = g.can("orders:write") && (["paid", "processing", "shipped", "delivered"] as string[]).includes(o.status);
+  const canShip = g.can("orders:write") && (["paid", "processing", "shipped", "delivered"] as string[]).includes(o.status) && !usingFulfillmentWorkflow;
+  const nextStage = (["paid", "processing"] as string[]).includes(o.status) ? STAGE_TRANSITIONS[o.fulfillmentStatus] ?? null : null;
+  const canPack = ["ready_to_ship", "partially_shipped"].includes(o.fulfillmentStatus);
   const Line = ({ l, v, minus, strong, muted }: { l: string; v: number; minus?: boolean; strong?: boolean; muted?: boolean }) => (
     <div className={cn("flex justify-between gap-3 py-1 text-[13px]", strong && "border-t border-line pt-2 font-semibold", muted && "text-muted")}><dt>{l}</dt><dd className="num">{minus && v ? "−" : ""}{money(Math.abs(v))}</dd></div>
   );
@@ -53,6 +68,29 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                   <td className="num hidden pr-4 sm:table-cell">{money(i.lineProfitCents)}</td>
                 </tr>))}</tbody></table></div>
           </Card>
+          {g.can("inventory:write") && (["paid", "processing"] as string[]).includes(o.status) && (
+            <Card>
+              <CardHeader title="Fulfillment" description="Processing → picking → packing → ready to ship, then create a shipment (brief §2-8)."
+                actions={<div className="flex flex-wrap items-center gap-2"><StageControl orderId={o.id} next={nextStage} />{canPack && <CreatePackageButton orderId={o.id} unpackaged={fulfillment.unpackaged} />}{o.fulfillmentStatus === "delivered" && <MarkCompletedButton orderId={o.id} />}</div>} />
+              {["picking", "packing"].includes(o.fulfillmentStatus) && <PickingList picks={fulfillment.picks} />}
+              {fulfillment.packages.length > 0 && <CardBody className="grid gap-3">{fulfillment.packages.map((p) => <PackageCard key={p.id} pkg={p} />)}</CardBody>}
+            </Card>
+          )}
+          {g.can("inventory:write") && fulfillment.packages.length > 0 && !(["paid", "processing"] as string[]).includes(o.status) && (
+            <Card><CardHeader title="Shipments" description="Multi-package support — the order stays partially shipped until every package ships (brief §40)." /><CardBody className="grid gap-3">
+              {fulfillment.packages.map((p) => <PackageCard key={p.id} pkg={p} />)}
+            </CardBody></Card>
+          )}
+          {!g.can("inventory:write") && fulfillment.packages.length > 0 && (
+            <Card><CardHeader title="Shipments" /><CardBody className="grid gap-2 text-[13px]">
+              {fulfillment.packages.map((p) => (
+                <div key={p.id} className="flex items-center justify-between gap-2 border-b border-line-soft py-1.5 last:border-0">
+                  <span>Package {p.packageNumber}{p.carrier ? ` · ${p.carrier}` : ""}{p.trackingNumber ? ` · ${p.trackingNumber}` : ""}</span>
+                  <StatusBadge status={p.status} />
+                </div>
+              ))}
+            </CardBody></Card>
+          )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Card><CardHeader title="Customer paid" /><CardBody><dl>
               <Line l="Subtotal" v={o.subtotalCents} />{o.discountTotalCents > 0 && <Line l={`Discount${o.discountCode ? ` (${o.discountCode})` : ""}`} v={o.discountTotalCents} minus />}
@@ -79,14 +117,32 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <p className="text-muted">{c.email}</p>{c.phone && <p className="text-muted">{c.phone}</p>}
             <p className="mt-1 text-xs text-muted">{c.totalOrders} {c.totalOrders === 1 ? "order" : "orders"} · {money(c.totalSpentCents)} lifetime</p>
           </CardBody></Card>
-          <Card><CardHeader title="Shipping" /><CardBody className="text-[13px]">{addr(o.shippingAddress).length ? addr(o.shippingAddress).map((l) => <p key={l}>{l}</p>) : <p className="text-muted">No shipping address (in-person sale).</p>}<p className="mt-2 text-xs text-muted">{o.expressShipping ? "Express" : "Standard"} · charged {money(o.shippingTotalCents)}</p></CardBody></Card>
+          <Card><CardHeader title="Shipping" /><CardBody className="text-[13px]">{addr(o.shippingAddress).length ? addr(o.shippingAddress).map((l) => <p key={l}>{l}</p>) : <p className="text-muted">No shipping address (in-person sale).</p>}<p className="mt-2 text-xs text-muted">{d.shippingMethodName ?? (o.expressShipping ? "Express" : "Standard")} · charged {money(o.shippingTotalCents)}</p></CardBody></Card>
           <Card><CardHeader title="Payment" /><CardBody className="grid grid-cols-1 gap-2 text-[13px]">
             {d.payments.map((p, i) => <div key={i} className="flex items-center justify-between gap-2"><span>{titleCase(p.provider)}{p.ref ? <span className="block text-xs text-muted">{p.ref}</span> : null}</span><span className="text-right"><StatusBadge status={p.status === "succeeded" ? "paid" : p.status} /><span className="block text-xs text-muted">{money(p.amountCents)}{p.feeCents ? ` · fee ${money(p.feeCents)}` : ""}</span></span></div>)}
             {d.refunds.map((r, i) => <p key={i} className="text-xs text-neg">Refund {money(r.amountCents)} · {r.reason} · {r.restocked ? "restocked" : "not restocked"} · {dateTimeFull(r.at)}</p>)}
           </CardBody></Card>
-          <Card><CardHeader title="Timeline" /><CardBody>
-            <ol className="relative grid gap-3 border-l border-line pl-4">{d.events.map((e, i) => (
-              <li key={i} className="text-[13px]"><span className="absolute -left-[4.5px] mt-1.5 size-2 rounded-full bg-accent" aria-hidden /><p className="font-medium">{titleCase(e.status)}</p><p className="text-xs text-muted">{dateTimeFull(e.at)}{e.user ? ` · ${e.user}` : ""}</p>{e.note && <p className="text-xs text-muted">{e.note}</p>}</li>
+          {canShip && <Card><CardHeader title="Simple tracking" description={o.trackingNumber ? `${o.carrier ?? "Carrier"} · ${o.trackingNumber}` : "For a single-package order — Phase 5 packages above are the detailed alternative."} /><CardBody>
+            <TrackingForm orderId={o.id} trackingNumber={o.trackingNumber} carrier={o.carrier} />
+          </CardBody></Card>}
+          {returnRequests.length > 0 && (
+            <Card><CardHeader title="Returns" /><CardBody className="grid gap-2 text-[13px]">
+              {returnRequests.map((r) => (
+                <Link key={r.id} href={`/admin/returns/${r.id}`} className="flex items-center justify-between gap-2 rounded-md border border-line-soft px-3 py-2 hover:bg-canvas">
+                  <span className="text-muted">{dateTimeFull(r.requestedAt)}</span><StatusBadge status={r.status} />
+                </Link>
+              ))}
+            </CardBody></Card>
+          )}
+          {canRefund && <Card><CardHeader title="Refund" description={`Refundable: ${money(refundableCents)}`} /><CardBody>
+            <PartialRefundForm orderId={o.id} refundableCents={refundableCents} />
+          </CardBody></Card>}
+          <Card><CardHeader title="Internal Notes" description="Never shown to the customer." /><CardBody>
+            <OrderNotes orderId={o.id} notes={o.internalNotes} />
+          </CardBody></Card>
+          <Card><CardHeader title="Timeline" description="Order, fulfillment, shipping and return events combined (brief §33)." /><CardBody>
+            <ol className="relative grid gap-3 border-l border-line pl-4">{fulfillment.timeline.map((e, i) => (
+              <li key={i} className="text-[13px]"><span className="absolute -left-[4.5px] mt-1.5 size-2 rounded-full bg-accent" aria-hidden /><p className="font-medium">{titleCase(e.status)}<span className="ml-1.5 text-xs font-normal text-subtle">({e.source})</span></p><p className="text-xs text-muted">{dateTimeFull(e.at)}{e.user ? ` · ${e.user}` : ""}</p>{e.note && <p className="text-xs text-muted">{e.note}</p>}</li>
             ))}</ol>
           </CardBody></Card>
         </div>

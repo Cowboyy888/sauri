@@ -4,6 +4,7 @@
  */
 import { STORE } from "../config";
 import { pct } from "../money";
+import { calculateTax } from "./tax";
 
 export type PricedLine = { unitPriceCents: number; unitCostCents: number; quantity: number; productId: string; categoryId: string };
 export type AppliedDiscount = {
@@ -14,6 +15,10 @@ export type AppliedDiscount = {
   maxDiscountCents: number | null;
 };
 export type ChannelRules = { feePercentBp: number; feeFixedCents: number; shipsOrders: boolean; chargesShipping: boolean };
+/** A resolved row from `shipping_methods`. When passed to computeTotals, it replaces the legacy
+ *  standard/express flat-rate logic; when omitted, that legacy logic (and every existing caller/test) is
+ *  unchanged. */
+export type ResolvedShippingMethod = { id: string; priceCents: number; carrierCostCents: number; waivableAboveThreshold: boolean };
 
 export type LineAmounts = { discountCents: number; lineTotalCents: number; lineCostCents: number; lineProfitCents: number };
 export type Totals = {
@@ -53,7 +58,7 @@ export function allocateDiscount(lines: PricedLine[], d: AppliedDiscount | null,
 
 export const marginPct = (profit: number, revenue: number) => (revenue ? Math.round((profit / revenue) * 10_000) / 100 : 0);
 
-export function computeTotals(lines: PricedLine[], discount: AppliedDiscount | null, channel: ChannelRules, express: boolean): Totals {
+export function computeTotals(lines: PricedLine[], discount: AppliedDiscount | null, channel: ChannelRules, express: boolean, shippingMethod?: ResolvedShippingMethod | null): Totals {
   const subtotalCents = lines.reduce((a, l) => a + l.unitPriceCents * l.quantity, 0);
   let discountTotalCents = 0;
   let freeShipping = false;
@@ -74,11 +79,13 @@ export function computeTotals(lines: PricedLine[], discount: AppliedDiscount | n
   const costTotalCents = lineAmounts.reduce((a, l) => a + l.lineCostCents, 0);
   let shippingTotalCents = 0;
   if (channel.chargesShipping && subtotalCents > 0) {
-    shippingTotalCents = express ? STORE.expressShippingCents
-      : freeShipping || net >= STORE.freeShippingThresholdCents ? 0 : STORE.standardShippingCents;
+    if (shippingMethod) shippingTotalCents = freeShipping || (shippingMethod.waivableAboveThreshold && net >= STORE.freeShippingThresholdCents) ? 0 : shippingMethod.priceCents;
+    else shippingTotalCents = express ? STORE.expressShippingCents : freeShipping || net >= STORE.freeShippingThresholdCents ? 0 : STORE.standardShippingCents;
   }
-  const shippingCostCents = channel.shipsOrders && subtotalCents > 0 ? (express ? STORE.carrierCostExpressCents : STORE.carrierCostStandardCents) : 0;
-  const taxTotalCents = pct(net, STORE.taxRateBp);
+  const shippingCostCents = channel.shipsOrders && subtotalCents > 0
+    ? (shippingMethod ? shippingMethod.carrierCostCents : express ? STORE.carrierCostExpressCents : STORE.carrierCostStandardCents)
+    : 0;
+  const taxTotalCents = calculateTax({ subtotalCents: net, shippingCents: shippingTotalCents }).taxAmountCents;
   const totalCents = net + shippingTotalCents + taxTotalCents;
   const paymentFeeCents = channel.feePercentBp || channel.feeFixedCents ? pct(totalCents, channel.feePercentBp) + channel.feeFixedCents : 0;
   const grossProfitCents = net - costTotalCents;
