@@ -81,7 +81,7 @@ this section's `updateOrderStatus`/`refundOrder` now interact with.
 - `available_stock = stock_quantity − reserved_quantity`, and status is OUT_OF_STOCK (≤ 0), LOW_STOCK (≤ reorder level) or IN_STOCK.
 - **No silent changes.** The only function that writes `stock_quantity` is `applyMovement()`. It runs inside the caller's transaction, holding the row lock, and always inserts the movement row alongside.
 - **Never below zero:** checked in code with a clear message, and again by the database constraint.
-- **Restock** (`RESTOCK` movement): supplier, quantity, unit cost, reference (purchase order), notes. A different unit cost updates the variant's cost as a **weighted average**: `(old cost × stock + new cost × qty) ÷ (stock + qty)`. Both the stock change and the cost change are audited.
+- **Restock** (`RESTOCK` movement): supplier, quantity, unit cost, reference (purchase order), notes. A different unit cost updates the variant's cost as a **weighted average**: `(old cost × stock + new cost × qty) ÷ (stock + qty)`. Both the stock change and the cost change are audited. This is the store's one costing method — see docs/INVENTORY_COSTING.md (Phase 8) for the full documentation, and docs/PURCHASE_WORKFLOW.md for how the structured purchase-order receiving flow (`PURCHASE` movement, `lib/purchasing/receiving.ts`) shares this exact formula rather than a second one.
 - **Adjust** to a counted level with a reason: ADJUSTMENT, DAMAGED, LOST, TRANSFER or MANUAL. The movement type records the reason.
 - **Opening stock** is written as a PURCHASE movement (reference `opening_balance`), so on-hand stock always equals the sum of a variant's movements. The demo seed verifies this for all 142 variants.
 
@@ -89,6 +89,14 @@ this section's `updateOrderStatus`/`refundOrder` now interact with.
 
 The code is matched case-insensitively. Checks: active, `starts_at` ≤ now ≤ `ends_at`, `used_count < usage_limit`, subtotal ≥ minimum, at least one eligible line for scoped codes, and per-customer uses below the limit (cancelled orders don't count). A quote shows a friendly error and keeps the rest of the cart. Placing an order with an invalid code fails the whole order.
 
-## 5. The business test (brief §12)
+## 5. Finance (Phase 9)
+
+Nothing here changes. `orders.subtotal_cents`/`discount_total_cents`/`refund_total_cents`/`cost_total_cents`/
+`gross_profit_cents` — all written by the transaction above and by `refundOrder()` (§1 refunds table) — are
+the only source of the money figures Phase 9 reports on. See docs/FINANCE_AUDIT.md for the full audit and
+docs/FINANCIAL_CALCULATIONS.md for exactly how the finance module builds on these columns (never a second
+calculation of revenue, discounts, refunds or COGS).
+
+## 6. The business test (brief §12)
 
 `tests/business.test.ts`: Aurora Ring, cost $50, price $100, stock 100, customer buys 3. The test runs **twice**, once as a manual order and once through the real web flow (pending → payment confirmed). Both pass: stock 97, revenue $300, COGS $150, gross profit $150, margin 50%, inventory value $4,850, one SALE movement 100 → 97, and the order and line snapshots carry the same numbers.

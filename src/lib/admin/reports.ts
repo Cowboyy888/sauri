@@ -5,16 +5,27 @@
 import { sql } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import { STORE } from "../config";
-import { getMetrics, getSalesBy, getSeries, type Range } from "../analytics/service";
+import { getMetrics, getSalesBy, getSalesByChannel, getSeries, type Range } from "../analytics/service";
 import { listOrders } from "./orders";
 import { lowStock, outOfStock } from "./inventory";
 import { n, rows } from "./sql";
+import { getFinancialSummary } from "../finance/summary";
+import { getExpensesByCategory, listExpenses } from "../finance/expenses";
+import { listCustomerPayments } from "../finance/customer-payments";
+import { listSupplierPayments } from "../finance/supplier-payments";
+import { listRefunds, getRefundAnalytics } from "../finance/refunds";
+import { getTaxReport } from "../finance/tax";
+import { getProductProfitability } from "../finance/product-profitability";
 
 export type ColType = "text" | "int" | "money" | "pct" | "date" | "datetime";
 export type Column = { key: string; label: string; type: ColType };
 export type Cell = string | number | null | undefined;
 export type Report = { key: ReportKey; title: string; description: string; dateBound: boolean; columns: Column[]; rows: Record<string, Cell>[]; totals?: Record<string, number> };
-export const REPORT_KEYS = ["daily-sales", "weekly-sales", "monthly-sales", "orders", "inventory", "product-performance", "profit", "customers", "low-stock"] as const;
+export const REPORT_KEYS = [
+  "daily-sales", "weekly-sales", "monthly-sales", "orders", "inventory", "product-performance", "profit", "customers", "low-stock",
+  // Phase 9 (brief §18) — extends this same engine, never a second one (docs/FINANCE_AUDIT.md).
+  "management-pl", "expenses", "cash-flow", "customer-payments", "supplier-payments", "refunds", "tax-summary", "purchases", "product-profitability", "sales-channel",
+] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
 
 export const REPORT_META: Record<ReportKey, { title: string; description: string; dateBound: boolean }> = {
@@ -27,6 +38,16 @@ export const REPORT_META: Record<ReportKey, { title: string; description: string
   profit: { title: "Profit", description: "Profit and loss summary for the period.", dateBound: true },
   customers: { title: "Customers", description: "Customers who bought in the period, with lifetime figures.", dateBound: true },
   "low-stock": { title: "Low stock", description: "Low and out-of-stock variants, most urgent first, with reorder estimates.", dateBound: false },
+  "management-pl": { title: "Management P&L", description: "Revenue, COGS, gross profit, operating expenses and operating profit for the period — an operational statement, not a certified accounting P&L.", dateBound: true },
+  expenses: { title: "Expenses", description: "Every posted (approved or paid) operating expense in the period.", dateBound: true },
+  "cash-flow": { title: "Cash flow", description: "Actual cash in and out — customer payments, supplier payments, expenses paid, and refunds paid back.", dateBound: true },
+  "customer-payments": { title: "Customer payments", description: "Every customer payment recorded in the period, with its provider, status and any refunded amount.", dateBound: true },
+  "supplier-payments": { title: "Supplier payments", description: "Every purchase order's payment position: total, paid, remaining, due date and status.", dateBound: false },
+  refunds: { title: "Refunds", description: "Every refund processed in the period, with reason and whether the goods were restocked.", dateBound: true },
+  "tax-summary": { title: "Tax summary", description: "Taxable sales and tax collected for the period, at the currently configured rate.", dateBound: true },
+  purchases: { title: "Purchases", description: "Every purchase order placed in the period, with totals and payment position.", dateBound: true },
+  "product-profitability": { title: "Product profitability", description: "Units sold, revenue, COGS, gross profit and margin by product, with current stock and inventory value.", dateBound: true },
+  "sales-channel": { title: "Sales by channel", description: "Net revenue, orders, units, gross profit and margin by sales channel.", dateBound: true },
 };
 
 const cents = (c: number) => Math.round(c) / 100; // exported money is in dollars (number)
@@ -54,12 +75,17 @@ export async function buildReport(db: DbOrTx, key: ReportKey, r: Range): Promise
         rows: all.rows.map((o) => ({ order: o.orderNumber, date: o.placedAt.toISOString(), customer: o.customer, email: o.email, channel: o.channel, items: o.items, payment: o.paymentStatus, status: o.status, total: cents(o.totalCents), gross_profit: cents(o.grossProfitCents), margin: o.grossMargin })) };
     }
     case "inventory": {
+      // Phase 8 (brief §8): every column a "product export" needs, without a second export mechanism —
+      // this report already had stock/reserved/available/reorder/cost/price/value; category, collection and
+      // the product's own status (draft/active/archived, distinct from the pre-existing stock-status column)
+      // are appended here rather than replacing anything an existing consumer relies on.
       const res = await rows<Record<string, string | null>>(db, sql`select * from variant_stock where product_status <> 'archived' order by product_name, sku`);
       return { ...meta, columns: [
         { key: "product", label: "Product", type: "text" }, { key: "variant", label: "Variant", type: "text" }, { key: "sku", label: "SKU", type: "text" }, { key: "barcode", label: "Barcode", type: "text" },
+        { key: "category", label: "Category", type: "text" }, { key: "collection", label: "Collection", type: "text" }, { key: "product_status", label: "Product status", type: "text" },
         { key: "stock", label: "Stock", type: "int" }, { key: "reserved", label: "Reserved", type: "int" }, { key: "available", label: "Available", type: "int" }, { key: "reorder", label: "Reorder level", type: "int" },
-        { key: "status", label: "Status", type: "text" }, { key: "cost", label: "Cost", type: "money" }, { key: "price", label: "Price", type: "money" }, { key: "value", label: "Inventory value", type: "money" }],
-        rows: res.map((x) => ({ product: x.product_name, variant: x.variant_label, sku: x.sku, barcode: x.barcode, stock: n(x.stock_quantity), reserved: n(x.reserved_quantity), available: n(x.available_stock), reorder: n(x.reorder_level), status: x.stock_status, cost: cents(n(x.cost_price_cents)), price: cents(n(x.selling_price_cents)), value: cents(n(x.inventory_value_cents)) })) };
+        { key: "status", label: "Stock status", type: "text" }, { key: "cost", label: "Cost", type: "money" }, { key: "price", label: "Price", type: "money" }, { key: "value", label: "Inventory value", type: "money" }],
+        rows: res.map((x) => ({ product: x.product_name, variant: x.variant_label, sku: x.sku, barcode: x.barcode, category: x.category_name, collection: x.collection_name ?? "", product_status: x.product_status, stock: n(x.stock_quantity), reserved: n(x.reserved_quantity), available: n(x.available_stock), reorder: n(x.reorder_level), status: x.stock_status, cost: cents(n(x.cost_price_cents)), price: cents(n(x.selling_price_cents)), value: cents(n(x.inventory_value_cents)) })) };
     }
     case "product-performance": {
       const g = await getSalesBy(db, r, "product");
@@ -108,6 +134,89 @@ export async function buildReport(db: DbOrTx, key: ReportKey, r: Range): Promise
         { key: "available", label: "Available", type: "int" }, { key: "reorder", label: "Reorder level", type: "int" }, { key: "sold30", label: "Sold (30 days)", type: "int" },
         { key: "days", label: "Est. days remaining", type: "int" }, { key: "suggest", label: "Suggested reorder (est.)", type: "int" }, { key: "last_sold", label: "Last sold", type: "date" }],
         rows: [...out, ...low].map((x) => ({ status: x.status, product: x.productName, variant: x.label, sku: x.sku, available: x.availableStock, reorder: x.reorderLevel, sold30: x.sold30, days: x.estimatedDaysRemaining, suggest: x.suggestedReorderQuantity, last_sold: x.lastSoldAt?.toISOString() ?? null })) };
+    }
+    /* ---------------- Phase 9: finance ---------------- */
+    case "management-pl": {
+      const s = await getFinancialSummary(db, r);
+      const money$ = (line: string, v: number) => ({ line, amount: cents(v), pct_of_revenue: s.netRevenueCents ? Math.round((v / s.netRevenueCents) * 1000) / 10 : null });
+      const byCategory = await getExpensesByCategory(db, r);
+      return { ...meta, columns: [{ key: "line", label: "Line", type: "text" }, { key: "amount", label: "Amount", type: "money" }, { key: "pct_of_revenue", label: "% of revenue", type: "pct" }],
+        rows: [
+          money$("Gross sales", s.grossSalesCents), money$("Discounts", -s.discountCents), money$("Refunds", -s.refundCents), money$("Net revenue", s.netRevenueCents),
+          money$("Cost of goods sold (COGS)", -s.cogsCents), money$("Gross profit", s.grossProfitCents),
+          ...byCategory.map((c) => money$(`  ${c.category}`, -c.totalCents)),
+          money$("Total operating expenses", -s.operatingExpensesCents), money$("Operating profit", s.operatingProfitCents),
+        ] };
+    }
+    case "expenses": {
+      const { rows: xs } = await listExpenses(db, { range: r, page: 1, pageSize: 100_000 });
+      return { ...meta, columns: [
+        { key: "expense_number", label: "Expense", type: "text" }, { key: "date", label: "Date", type: "date" }, { key: "category", label: "Category", type: "text" }, { key: "description", label: "Description", type: "text" },
+        { key: "amount", label: "Amount", type: "money" }, { key: "status", label: "Status", type: "text" }, { key: "supplier", label: "Supplier", type: "text" }, { key: "payment_method", label: "Payment method", type: "text" }, { key: "created_by", label: "Created by", type: "text" }],
+        rows: xs.map((x) => ({ expense_number: x.expenseNumber, date: x.expenseDate.toISOString(), category: x.category, description: x.description, amount: cents(x.amountCents), status: x.status, supplier: x.supplierName ?? "", payment_method: x.paymentMethod ?? "", created_by: x.createdBy ?? "" })) };
+    }
+    case "cash-flow": {
+      const { getCashFlowSeries } = await import("../finance/cash-flow");
+      const s = await getCashFlowSeries(db, r);
+      const rowsOut = s.points.map((p) => ({ period: p.bucket.slice(0, 10), cash_in: cents(p.cashInCents), cash_out: cents(p.cashOutCents), net: cents(p.netCents) }));
+      const t = rowsOut.reduce((a, x) => ({ cash_in: a.cash_in + x.cash_in, cash_out: a.cash_out + x.cash_out, net: a.net + x.net }), { cash_in: 0, cash_out: 0, net: 0 });
+      return { ...meta, columns: [{ key: "period", label: "Period", type: "text" }, { key: "cash_in", label: "Cash in", type: "money" }, { key: "cash_out", label: "Cash out", type: "money" }, { key: "net", label: "Net cash flow", type: "money" }], rows: rowsOut, totals: t };
+    }
+    case "customer-payments": {
+      const { rows: xs } = await listCustomerPayments(db, { range: r, page: 1, pageSize: 100_000 });
+      return { ...meta, columns: [
+        { key: "order", label: "Order", type: "text" }, { key: "date", label: "Date", type: "datetime" }, { key: "provider", label: "Provider", type: "text" }, { key: "reference", label: "Reference", type: "text" },
+        { key: "amount", label: "Amount", type: "money" }, { key: "refunded", label: "Refunded", type: "money" }, { key: "status", label: "Status", type: "text" }],
+        rows: xs.map((x) => ({ order: x.orderNumber, date: (x.paidAt ?? x.createdAt).toISOString(), provider: x.provider, reference: x.transactionRef ?? "", amount: cents(x.amountCents), refunded: cents(x.refundedCents), status: x.status })) };
+    }
+    case "supplier-payments": {
+      const { rows: xs } = await listSupplierPayments(db, { page: 1, pageSize: 100_000 });
+      return { ...meta, columns: [
+        { key: "po", label: "Purchase order", type: "text" }, { key: "supplier", label: "Supplier", type: "text" }, { key: "total", label: "PO amount", type: "money" },
+        { key: "paid", label: "Amount paid", type: "money" }, { key: "remaining", label: "Remaining", type: "money" }, { key: "due", label: "Due date", type: "date" }, { key: "status", label: "Status", type: "text" }],
+        rows: xs.map((x) => ({ po: x.poNumber, supplier: x.supplierName, total: cents(x.totalCents), paid: cents(x.amountPaidCents), remaining: cents(x.remainingCents), due: x.dueDate?.toISOString() ?? null, status: x.status })) };
+    }
+    case "refunds": {
+      const [{ rows: xs }, a] = await Promise.all([listRefunds(db, { range: r, page: 1, pageSize: 100_000 }), getRefundAnalytics(db, r)]);
+      return { ...meta, columns: [
+        { key: "order", label: "Order", type: "text" }, { key: "date", label: "Date", type: "datetime" }, { key: "customer", label: "Customer", type: "text" }, { key: "amount", label: "Amount", type: "money" },
+        { key: "reason", label: "Reason", type: "text" }, { key: "restocked", label: "Restocked", type: "text" }, { key: "processed_by", label: "Processed by", type: "text" }],
+        rows: xs.map((x) => ({ order: x.orderNumber, date: x.createdAt.toISOString(), customer: x.customerName, amount: cents(x.amountCents), reason: x.reason ?? "", restocked: x.restocked ? "Yes" : "No", processed_by: x.processedBy ?? "" })),
+        totals: { amount: cents(a.totalRefundsCents) } };
+    }
+    case "tax-summary": {
+      const t = await getTaxReport(db, r);
+      return { ...meta, columns: [{ key: "line", label: "Line", type: "text" }, { key: "amount", label: "Amount", type: "money" }, { key: "count", label: "Count", type: "int" }],
+        rows: t.configured ? [
+          { line: "Taxable sales", amount: cents(t.taxableSalesCents), count: t.orders },
+          { line: "Tax-exempt sales", amount: cents(t.taxExemptSalesCents), count: null },
+          { line: `Tax collected (${t.ratePercent}% configured rate)`, amount: cents(t.taxAmountCents), count: null },
+        ] : [{ line: "Tax configuration required", amount: null, count: null }] };
+    }
+    case "purchases": {
+      const res = await rows<Record<string, string | null>>(db, sql`
+        select o.po_number, s.name as supplier_name, o.order_date, o.status, o.payment_status, o.total_cents, o.amount_paid_cents
+        from purchase_orders o join suppliers s on s.id = o.supplier_id
+        where o.order_date >= ${r.from.toISOString()} and o.order_date < ${r.to.toISOString()} order by o.order_date desc`);
+      return { ...meta, columns: [
+        { key: "po", label: "Purchase order", type: "text" }, { key: "supplier", label: "Supplier", type: "text" }, { key: "date", label: "Order date", type: "date" }, { key: "status", label: "Status", type: "text" },
+        { key: "payment_status", label: "Payment status", type: "text" }, { key: "total", label: "Total", type: "money" }, { key: "paid", label: "Amount paid", type: "money" }],
+        rows: res.map((x) => ({ po: x.po_number, supplier: x.supplier_name, date: x.order_date ? new Date(x.order_date).toISOString() : null, status: x.status, payment_status: x.payment_status, total: cents(n(x.total_cents)), paid: cents(n(x.amount_paid_cents)) })) };
+    }
+    case "product-profitability": {
+      const xs = await getProductProfitability(db, r);
+      return { ...meta, columns: [
+        { key: "product", label: "Product", type: "text" }, { key: "skus", label: "SKUs", type: "text" }, { key: "units", label: "Units sold", type: "int" }, { key: "gross_sales", label: "Gross sales", type: "money" },
+        { key: "discounts", label: "Discounts", type: "money" }, { key: "refunds", label: "Refunds", type: "money" }, { key: "net_revenue", label: "Net revenue", type: "money" }, { key: "cogs", label: "COGS", type: "money" },
+        { key: "gross_profit", label: "Gross profit", type: "money" }, { key: "margin", label: "Gross margin %", type: "pct" }, { key: "stock", label: "Current stock", type: "int" }, { key: "value", label: "Inventory value", type: "money" }],
+        rows: xs.map((x) => ({ product: x.productName, skus: x.skus, units: x.unitsSold, gross_sales: cents(x.grossSalesCents), discounts: cents(x.discountCents), refunds: cents(x.refundCents), net_revenue: cents(x.netRevenueCents), cogs: cents(x.cogsCents), gross_profit: cents(x.grossProfitCents), margin: x.grossMarginPct, stock: x.currentStock, value: cents(x.inventoryValueCents) })) };
+    }
+    case "sales-channel": {
+      const g = await getSalesByChannel(db, r);
+      return { ...meta, columns: [
+        { key: "channel", label: "Channel", type: "text" }, { key: "revenue", label: "Net revenue", type: "money" }, { key: "orders", label: "Orders", type: "int" }, { key: "units", label: "Units sold", type: "int" },
+        { key: "gross_profit", label: "Gross profit", type: "money" }, { key: "margin", label: "Gross margin %", type: "pct" }, { key: "share", label: "Share of revenue %", type: "pct" }],
+        rows: g.map((x) => ({ channel: x.label, revenue: cents(x.netRevenueCents), orders: x.orders, units: x.units, gross_profit: cents(x.grossProfitCents), margin: x.grossMarginPct, share: x.shareOfRevenuePct })) };
     }
   }
 }

@@ -107,6 +107,14 @@ export async function release(tx: Tx, row: LockedRow, quantity: number) {
 const ADJUST_TYPES = ["ADJUSTMENT", "DAMAGED", "LOST", "TRANSFER", "MANUAL"] as const;
 export type AdjustType = (typeof ADJUST_TYPES)[number];
 
+/** The one costing method this store uses (brief §27, docs/INVENTORY_COSTING.md): weighted average of the
+ *  stock already on hand and the new units coming in. Shared by `restock()` and Phase 8's purchase-receiving
+ *  flow (`lib/purchasing/receiving.ts`) so the method can never drift between the two call sites. */
+export function weightedAverageCost(oldCostCents: number, oldQty: number, newCostCents: number, newQty: number): number {
+  if (oldQty + newQty <= 0) return newCostCents;
+  return Math.round((oldCostCents * oldQty + newCostCents * newQty) / (oldQty + newQty));
+}
+
 /** RESTOCK from a supplier. A new unit cost updates the variant cost as a weighted average. */
 export async function restock(db: Db, actor: Actor, input: { variantId: string; quantity: number; unitCostCents?: number; supplierName?: string; reference?: string; notes?: string }) {
   assertCan(actor, "inventory:write");
@@ -122,7 +130,7 @@ export async function restock(db: Db, actor: Actor, input: { variantId: string; 
       supplierId = s?.id ?? null;
     }
     if (input.unitCostCents != null && input.unitCostCents !== variant.costPriceCents) {
-      const newCost = Math.round((variant.costPriceCents * row.stockQuantity + input.unitCostCents * input.quantity) / (row.stockQuantity + input.quantity));
+      const newCost = weightedAverageCost(variant.costPriceCents, row.stockQuantity, input.unitCostCents, input.quantity);
       await tx.update(productVariants).set({ costPriceCents: newCost }).where(eq(productVariants.id, variant.id));
       await audit(tx, actor, "Changed cost price (weighted average)", "product_variant", variant.sku, { costPriceCents: variant.costPriceCents }, { costPriceCents: newCost });
     }

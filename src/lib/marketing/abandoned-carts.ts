@@ -11,6 +11,10 @@ import { desc, eq, sql } from "drizzle-orm";
 import type { Db, DbOrTx } from "../db/client";
 import { abandonedCarts, customers } from "../db/schema";
 import { n, rows } from "../admin/sql";
+import { type Actor, assertCan } from "../auth/permissions";
+import { audit } from "../audit";
+import { ValidationError } from "../errors";
+import { emailProvider, abandonedCartRecoveryEmail } from "../email/provider";
 
 export type CartSyncItem = { variantId: string; quantity: number; unitPriceCents: number; name: string };
 
@@ -54,6 +58,23 @@ export async function listAbandonedCarts(db: DbOrTx, thresholdHours: number, pag
       return { id: r.id, customerId: r.customerId, customerName: r.name, customerEmail: r.email, items, itemCount: items.reduce((a, i) => a + i.quantity, 0), cartValueCents: r.cartValueCents, effectiveStatus, createdAt: new Date(r.createdAt), lastActivityAt: new Date(r.lastActivityAt) };
     }),
   };
+}
+
+/**
+ * Staff-triggered recovery send (brief §20) — real, but never automatic: the business explicitly clicks
+ * "send now" for one cart. A scheduled automation would call this same function on a timer once the
+ * business turns on `settings.marketing.abandonedCartAutomation.enabled` and a cron slot is available
+ * (docs/PHASE_7_AUDIT.md — the Hobby-plan cron slot is already used by release-reservations).
+ */
+export async function sendAbandonedCartRecoveryNow(db: Db, actor: Actor, cartId: string) {
+  assertCan(actor, "marketing:write");
+  const [row] = await db.select({ email: customers.email, name: customers.name, items: abandonedCarts.items, status: abandonedCarts.status })
+    .from(abandonedCarts).innerJoin(customers, eq(customers.id, abandonedCarts.customerId)).where(eq(abandonedCarts.id, cartId));
+  if (!row) throw new ValidationError("Cart not found.");
+  if (row.status === "recovered") throw new ValidationError("This cart has already been recovered.");
+  const items = row.items as CartSyncItem[];
+  await emailProvider.send(abandonedCartRecoveryEmail({ email: row.email, name: row.name, itemCount: items.reduce((a, i) => a + i.quantity, 0) }));
+  await audit(db, actor, "Sent abandoned-cart recovery email", "abandoned_cart", cartId, undefined, { email: row.email });
 }
 
 export async function abandonedCartKpis(db: DbOrTx, thresholdHours: number) {

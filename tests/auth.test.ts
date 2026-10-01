@@ -92,8 +92,12 @@ describe("server-side authorization", () => {
     expect(can("ADMIN", "staff:write")).toBe(false);
     expect(can("ADMIN", "settings:write")).toBe(false);
     for (const p of ["products:write", "orders:write", "customers:write", "inventory:write", "sales:read", "reports:read"] as const) expect(can("ADMIN", p)).toBe(true);
-    expect([...PERMISSIONS.SALES].sort()).toEqual(["customers:read", "customers:write", "dashboard:read", "loyalty:read", "orders:read", "orders:write", "sales:read"]);
-    expect([...PERMISSIONS.INVENTORY].sort()).toEqual(["dashboard:read", "inventory:read", "inventory:write", "products:read", "products:write"]);
-    expect([...PERMISSIONS.VIEWER]).toEqual(["dashboard:read"]);
+    expect([...PERMISSIONS.SALES].sort()).toEqual(["customers:read", "customers:write", "dashboard:read", "loyalty:read", "marketing:read", "orders:read", "orders:write", "purchasing:read", "sales:read"]);
+    expect([...PERMISSIONS.INVENTORY].sort()).toEqual(["dashboard:read", "inventory:read", "inventory:write", "products:read", "products:write", "purchasing:read"]);
+    expect([...PERMISSIONS.VIEWER].sort()).toEqual(["dashboard:read", "marketing:read", "purchasing:read"]);
+    expect(can("ADMIN", "marketing:write")).toBe(true);
+    expect(can("ADMIN", "purchasing:write")).toBe(true);
+    expect(can("INVENTORY", "purchasing:write")).toBe(false);
+    expect(can("SALES", "purchasing:write")).toBe(false);
   });
 });

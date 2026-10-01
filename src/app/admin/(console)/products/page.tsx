@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getDb } from "@/lib/db/client";
+import { categories, collections } from "@/lib/db/schema";
 import { resolveRange } from "@/lib/analytics/service";
 import { guard } from "@/lib/admin/guard";
 import { listCategoriesWithCounts, listProducts } from "@/lib/admin/products";
@@ -18,6 +19,8 @@ import { EmptyState, ErrorState } from "@/components/admin/states";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Thumb } from "@/components/admin/thumb";
 import { ProductMenu } from "@/components/admin/product-forms";
+import { ExportMenu } from "@/components/admin/export-menu";
+import { ProductBulkPanel, ProductImportButton } from "@/components/admin/product-bulk";
 
 export const metadata = { title: "Products" };
 const range = (lo: number, hi: number) => (lo === hi ? money(lo) : `${money(lo)} – ${money(hi)}`);
@@ -28,12 +31,21 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams, db = getDb(), parsed = parseRange(sp), r = await resolveRange(db, parsed.key, parsed.custom);
   const { page, pageSize } = pageParams(sp);
   const params = { q: one(sp.q), category: one(sp.category), status: one(sp.status), sort: one(sp.sort), dir: one(sp.dir), range: one(sp.range), from: one(sp.from), to: one(sp.to) };
-  const res = await safe("products", async () => ({ list: await listProducts(db, { ...params, page, pageSize, range: r }), cats: await listCategoriesWithCounts(db), suppliers: await listSuppliers(db) }), one(sp.fail));
+  const res = await safe("products", async () => ({
+    list: await listProducts(db, { ...params, page, pageSize, range: r }), cats: await listCategoriesWithCounts(db), suppliers: await listSuppliers(db),
+    collections: await db.select({ id: collections.id, name: collections.name }).from(collections),
+    categoriesForBulk: await db.select({ id: categories.id, name: categories.name }).from(categories),
+  }), one(sp.fail));
   const canWrite = g.can("products:write");
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader title="Products" description={`Units sold and revenue for ${rangeLabel(parsed).toLowerCase()}. Search covers name, SKU, barcode, category and variant.`}
-        actions={canWrite && <Link href="/admin/products/new" className={buttonVariants({ variant: "primary" })}><Plus />New product</Link>} />
+        actions={<div className="flex flex-wrap gap-2">
+          {g.can("reports:read") && <ExportMenu report="inventory" params={{}} />}
+          {canWrite && <ProductImportButton />}
+          {canWrite && <Link href="/admin/products/new" className={buttonVariants({ variant: "primary" })}><Plus />New product</Link>}
+        </div>} />
+      {canWrite && res.ok && <ProductBulkPanel products={res.data.list.rows.map((p) => ({ id: p.id, name: p.name, sku: p.sku, status: p.status }))} categories={res.data.categoriesForBulk} collections={res.data.collections} />}
       <Card>
         <FilterBar>
           <SearchInput placeholder="Search name, SKU, barcode, category, variant" />

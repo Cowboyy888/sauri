@@ -6,6 +6,7 @@ import { Breadcrumb } from "@/components/storefront/shop/breadcrumb";
 import { ProductCard } from "@/components/storefront/shop/product-card";
 import { Pagination } from "@/components/storefront/shop/pagination";
 import { CollectionControls, DesktopFilterSidebar } from "@/components/storefront/collections/collection-controls";
+import { TrackCollectionView } from "@/components/storefront/collections/track-collection-view";
 
 export const revalidate = 60;
 
@@ -50,6 +51,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <TrackCollectionView collectionId={resolved.collectionId} />
       <Breadcrumb items={[{ label: "Collections", href: "/collections" }, { label: resolved.title }]} />
       <h1 className="mt-4 font-display text-4xl">{resolved.title}</h1>
       <p className="mt-2 max-w-xl font-sans text-sm text-ink/60">{resolved.description}</p>

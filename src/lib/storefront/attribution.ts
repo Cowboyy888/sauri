@@ -9,18 +9,21 @@ import { cookies } from "next/headers";
 
 export const ATTRIBUTION_COOKIE = "sauri_attribution";
 
-export type AttributionSource = "WEBSITE" | "INSTAGRAM" | "FACEBOOK" | "TIKTOK" | "GOOGLE" | "REFERRAL" | "PHYSICAL_STORE" | "WHOLESALE" | "DIRECT" | "OTHER";
-export type AttributionDetails = { utmSource?: string; utmMedium?: string; utmCampaign?: string; utmContent?: string; referrer?: string };
+export type AttributionSource = "WEBSITE" | "INSTAGRAM" | "FACEBOOK" | "TIKTOK" | "GOOGLE" | "REFERRAL" | "PHYSICAL_STORE" | "WHOLESALE" | "DIRECT" | "EMAIL" | "OTHER";
+export type AttributionDetails = { utmSource?: string; utmMedium?: string; utmCampaign?: string; utmTerm?: string; utmContent?: string; referrer?: string };
 export type Attribution = { source: AttributionSource; details: AttributionDetails };
 
 const SOURCE_HOSTS: [RegExp, AttributionSource][] = [
   [/instagram/i, "INSTAGRAM"], [/facebook|fb\.com/i, "FACEBOOK"], [/tiktok/i, "TIKTOK"], [/google/i, "GOOGLE"],
 ];
 
-/** Maps whatever the client captured into one of the fixed acquisition-source values (brief §8). A `ref`
- *  query param (an affiliate/referral link) beats a bare referrer; an unrecognized external referrer with
- *  no UTM data is "REFERRAL"; no referrer and no UTM at all is "DIRECT" (typed the URL, opened a bookmark). */
+/** Maps whatever the client captured into one of the fixed acquisition-source values (brief §8). `utm_medium
+ *  = email` (brief §22-25's email campaigns) beats everything else, since a "source" value for an email
+ *  send is often the campaign name itself, not a recognizable platform. A `ref` query param (an affiliate/
+ *  referral link) beats a bare referrer; an unrecognized external referrer with no UTM data is "REFERRAL";
+ *  no referrer and no UTM at all is "DIRECT" (typed the URL, opened a bookmark). */
 export function classifyAttribution(details: AttributionDetails, ownHost: string): AttributionSource {
+  if (details.utmMedium?.toLowerCase() === "email") return "EMAIL";
   const utmSource = details.utmSource?.toLowerCase();
   if (utmSource) { for (const [re, source] of SOURCE_HOSTS) if (re.test(utmSource)) return source; return "OTHER"; }
   if (details.referrer) {

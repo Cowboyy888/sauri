@@ -54,6 +54,30 @@ the same `orders`/`order_items` rows, as any other paid order — every function
 correctly with no new code. This is checked directly in `tests/checkout-e2e.test.ts`, which reads
 `getMetrics()` immediately after a real checkout + webhook and asserts revenue/COGS/gross profit.
 
+## Added in Phase 7
+
+`lib/analytics/marketing.ts` — marketing/campaign/channel performance, the conversion funnel, product/
+collection funnel columns, search analytics, back-in-stock demand, and abandoned-cart recovery analytics.
+See docs/MARKETING_ANALYTICS.md for every metric's exact definition and docs/EVENT_TRACKING.md for the new
+`marketing_events` log these read from. Money figures still come exclusively from `orders`/`order_items`
+(joined through the new `marketing_attributions` snapshot for campaign/channel grouping — docs/ATTRIBUTION.md)
+— nothing here duplicates a total the sales dashboard already computes; only behavioral counts (sessions,
+views, cart adds) are new data.
+
+## Added in Phase 8
+
+`lib/analytics/purchasing.ts` — supplier performance (purchase orders, units purchased, total spend, average
+cost, average lead time, late deliveries, rejected/damaged quantity — "only calculate metrics supported by
+actual receiving data," brief §34) and purchase analytics (purchase spend, units purchased, average cost,
+open POs, incoming inventory value, spend by supplier). See docs/PURCHASING.md and docs/PURCHASE_WORKFLOW.md.
+
+**Purchase spend is never COGS, and is never added to it.** `getPurchaseVsSales()` reports Sales Revenue,
+Purchase Spend, COGS and Inventory Value as four clearly separate numbers on the same screen
+(`/admin/analytics/purchases`) specifically so they can never be confused — COGS still comes exclusively
+from `orders.cost_total_cents` (this page's own definition above), completely unaffected by purchasing
+activity; see docs/INVENTORY_COSTING.md for why a purchase changes the *going-forward* cost, never a
+past sale's recorded COGS.
+
 ## Added in Phase 5
 
 Two new files, `lib/analytics/shipping.ts` and `lib/analytics/returns.ts`, plus their pages
@@ -77,6 +101,31 @@ counts of orders currently `processing`, `picking`+`packing`, `ready_to_ship`+`p
 returns still needing action (`requested` + `received` status), each linking into `/admin/fulfillment` or
 `/admin/returns`. Visible only to roles with `inventory:write` (the same gate the rest of the operational
 dashboard already uses).
+
+## Added in Phase 9
+
+`lib/finance/summary.ts` is the one authoritative financial calculation service (brief §14): `getGrossSales`,
+`getDiscounts`, `getRefunds`, `getNetRevenue`, `getCOGS`, `getGrossProfit`, `getGrossMargin`,
+`getOperatingExpenses`, `getOperatingProfit`, `getOperatingMargin`, `getCustomerPayments`,
+`getSupplierPayments`, `getCashIn`, `getCashOut`, `getNetCashFlow`, `getOutstandingSupplierPayments`,
+`getOverdueSupplierPayments`, and the combined `getFinancialSummary(range)` for the Financial Overview page.
+The dollar figures for revenue/COGS/profit are read straight from `getMetrics()` above — nothing here
+recomputes them. Two things are genuinely new:
+
+- **Accrual vs. cash.** Operating expenses for the P&L (`getOperatingExpenses`) sum expenses with status
+  APPROVED or PAID, dated by `expense_date` (when the cost was incurred). Cash flow (`getExpensesCashOutCents`
+  inside `getCashOut`) sums only PAID expenses, dated by `paid_at` (when money actually left). The same
+  distinction applies to revenue vs. cash in — see docs/CASH_FLOW.md.
+- **N/A margins.** `getGrossMargin`/`getOperatingMargin` return `null` (not the pre-existing `getMetrics()`
+  convention of `0`) when net revenue is zero, matching brief §32's explicit requirement. This is computed
+  independently in `lib/finance/summary.ts`, not by changing `getMetrics()` itself — every Phase 1-8 page
+  that already reads `grossMarginPct` keeps its established zero-on-zero display, unchanged.
+
+Also new: `lib/finance/cash-flow.ts` (bucketed cash-in/cash-out/net/cumulative series), `lib/finance/tax.ts`
+(tax report from real `orders.tax_total_cents`, never a re-derived guess), `lib/finance/refunds.ts` and
+`lib/finance/product-profitability.ts` (both allocate an order-level refund pro rata across its lines for
+reporting — an estimate, labeled as such, never stored as fact). See docs/FINANCIAL_CALCULATIONS.md,
+docs/CASH_FLOW.md, docs/TAX_REPORTING.md and docs/FINANCIAL_REPORTS.md.
 
 ## Added in Phase 2
 

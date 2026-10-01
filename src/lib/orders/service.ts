@@ -6,7 +6,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db, DbOrTx, Tx } from "../db/client";
 import {
-  acquisitionSource, categories, customers, inventory, orderEvents, orderItems, orders, payments, productVariants, products, refunds, salesChannels, shippingMethods,
+  acquisitionSource, categories, customers, inventory, marketingAttributions, orderEvents, orderItems, orders, payments, productVariants, products, refunds, salesChannels, shippingMethods,
   type VariantSnapshot,
 } from "../db/schema";
 import { STORE } from "../config";
@@ -19,6 +19,8 @@ import { consumeDiscount, validateDiscount, type DiscountRow } from "../discount
 import { applyMovement, lockInventory, release, reserve } from "../inventory/service";
 import { earnPointsForOrder, reversePointsForRefund } from "../loyalty/service";
 import { markCartRecovered } from "../marketing/abandoned-carts";
+import { resolveCampaignId } from "../marketing/campaigns";
+import { recordOrderEvent } from "../marketing/events";
 
 type OrderRow = typeof orders.$inferSelect;
 export type OrderStatus = OrderRow["status"];
@@ -75,7 +77,7 @@ async function priceLines(tx: DbOrTx, lines: CartLine[]) {
   const rows = await tx.select({
     id: productVariants.id, sku: productVariants.sku, material: productVariants.material, size: productVariants.size, color: productVariants.color, gemstone: productVariants.gemstone,
     price: productVariants.sellingPriceCents, cost: productVariants.costPriceCents, vStatus: productVariants.status,
-    productId: products.id, productName: products.name, pStatus: products.status, categoryId: categories.id,
+    productId: products.id, productName: products.name, pStatus: products.status, categoryId: categories.id, collectionId: products.collectionId,
     stock: inventory.stockQuantity, reserved: inventory.reservedQuantity,
   }).from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))
@@ -94,7 +96,7 @@ async function priceLines(tx: DbOrTx, lines: CartLine[]) {
     const label = variantLabel(r);
     if (avail < (wanted.get(l.variantId) ?? 0)) problems.push(avail > 0 ? `Only ${avail} ${avail === 1 ? "unit" : "units"} of ${r.productName} (${label}) available.` : `${r.productName} (${label}) is sold out.`);
     loaded.push({
-      variantId: r.id, sku: r.sku, productId: r.productId, categoryId: r.categoryId, productName: r.productName,
+      variantId: r.id, sku: r.sku, productId: r.productId, categoryId: r.categoryId, collectionId: r.collectionId, productName: r.productName,
       snapshot: { material: r.material, size: r.size, color: r.color, gemstone: r.gemstone, label },
       unitPriceCents: r.price, unitCostCents: r.cost, quantity: l.quantity, available: avail, personalization: l.personalization,
     });
@@ -160,11 +162,12 @@ export type PlaceOrderInput = QuoteInput & {
   placedAt?: Date;
 };
 
-async function upsertCustomer(tx: Tx, c: PlaceOrderInput["customer"], at?: Date, acquisition?: PlaceOrderInput["acquisition"]) {
+type TouchSnapshot = { source: (typeof acquisitionSource.enumValues)[number] | null; details: Record<string, string | undefined> | null };
+async function upsertCustomer(tx: Tx, c: PlaceOrderInput["customer"], at?: Date, acquisition?: PlaceOrderInput["acquisition"]): Promise<{ id: string; firstTouch: TouchSnapshot; lastTouch: TouchSnapshot }> {
   const email = c.email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError("Enter a valid email address.");
   const name = c.name.trim() || email;
-  const [existing] = await tx.select({ id: customers.id, firstTouchSource: customers.firstTouchSource }).from(customers).where(eq(customers.email, email));
+  const [existing] = await tx.select({ id: customers.id, firstTouchSource: customers.firstTouchSource, firstTouchDetails: customers.firstTouchDetails }).from(customers).where(eq(customers.email, email));
   const touchFields = acquisition ? {
     ...(!existing?.firstTouchSource ? { firstTouchSource: acquisition.source, firstTouchDetails: acquisition.details, firstVisitAt: at ?? new Date() } : {}),
     lastTouchSource: acquisition.source, lastTouchDetails: acquisition.details,
@@ -172,7 +175,11 @@ async function upsertCustomer(tx: Tx, c: PlaceOrderInput["customer"], at?: Date,
   const [row] = await tx.insert(customers).values({ email, name, phone: c.phone ?? null, ...touchFields, ...(at ? { createdAt: at, updatedAt: at } : {}) })
     .onConflictDoUpdate({ target: customers.email, set: { name, updatedAt: new Date(), ...touchFields } })
     .returning({ id: customers.id });
-  return row!.id;
+  const firstTouch: TouchSnapshot = existing?.firstTouchSource
+    ? { source: existing.firstTouchSource, details: (existing.firstTouchDetails ?? null) as TouchSnapshot["details"] }
+    : acquisition ? { source: acquisition.source, details: acquisition.details ?? null } : { source: null, details: null };
+  const lastTouch: TouchSnapshot = acquisition ? { source: acquisition.source, details: acquisition.details ?? null } : firstTouch;
+  return { id: row!.id, firstTouch, lastTouch };
 }
 
 /**
@@ -189,7 +196,7 @@ export async function placeOrder(db: Db, input: PlaceOrderInput, actor: Actor = 
   return db.transaction(async (tx) => {
     const at = input.placedAt ?? new Date();
     const channel = await loadChannel(tx, input.channel ?? "WEBSITE");
-    const customerId = await upsertCustomer(tx, input.customer, input.placedAt, input.acquisition);
+    const { id: customerId, firstTouch, lastTouch } = await upsertCustomer(tx, input.customer, input.placedAt, input.acquisition);
     const locked = await lockInventory(tx, lines.map((l) => l.variantId)); // lock first; everything read after is consistent
     const { loaded, problems } = await priceLines(tx, lines);
     if (problems.length) throw new InsufficientStockError(problems[0]!);
@@ -224,6 +231,23 @@ export async function placeOrder(db: Db, input: PlaceOrderInput, actor: Actor = 
     }
     if (discount && (t.discountTotalCents > 0 || discount.type === "free_shipping")) await consumeDiscount(tx, discount, order.id, customerId, t.discountTotalCents);
 
+    // Phase 7 (brief §4-5, §8): an immutable per-order attribution snapshot, and funnel events — see
+    // docs/PHASE_7_AUDIT.md for why this can't just read customers.last_touch_* later (it keeps changing
+    // on future visits).
+    let lastCampaignId: string | null = null;
+    if (firstTouch.source || lastTouch.source) {
+      const [firstCampaignId, lastId] = await Promise.all([
+        resolveCampaignId(tx, firstTouch.details?.utmCampaign), resolveCampaignId(tx, lastTouch.details?.utmCampaign),
+      ]);
+      lastCampaignId = lastId;
+      await tx.insert(marketingAttributions).values({
+        orderId: order.id, customerId,
+        firstTouchSource: firstTouch.source, firstTouchDetails: firstTouch.details, firstTouchCampaignId: firstCampaignId,
+        lastTouchSource: lastTouch.source, lastTouchDetails: lastTouch.details, lastTouchCampaignId: lastCampaignId,
+      });
+      if (status === "pending" && channel.code === "WEBSITE") await recordOrderEvent(tx, "checkout_started", order.id, { campaignId: lastCampaignId, customerId });
+    }
+
     await tx.insert(orderEvents).values([
       { orderId: order.id, status: "pending" as const, createdAt: at, userId: actor.userId },
       ...(status === "paid" ? [{ orderId: order.id, status: "paid" as const, createdAt: at, userId: actor.userId }] : []),
@@ -232,7 +256,11 @@ export async function placeOrder(db: Db, input: PlaceOrderInput, actor: Actor = 
       orderId: order.id, provider: input.paymentProvider ?? (channel.code === "WEBSITE" ? "stripe" : "manual"), providerRef: input.paymentRef ?? null,
       status: status === "paid" ? "succeeded" : "pending", amountCents: t.totalCents, feeCents: t.paymentFeeCents, createdAt: at,
     });
-    if (status === "paid") { await announcePaid(tx, order, input.customer.name, channel.name); await earnPointsForOrder(tx, order); }
+    if (status === "paid") {
+      await announcePaid(tx, order, input.customer.name, channel.name);
+      await earnPointsForOrder(tx, order);
+      await recordOrderEvent(tx, "purchase_completed", order.id, { campaignId: lastCampaignId, customerId });
+    }
     if (actor.userId) await audit(tx, actor, "Created order", "order", order.orderNumber, undefined, { channel: channel.code, totalCents: t.totalCents });
     return order;
   });
@@ -267,6 +295,8 @@ export async function markOrderPaid(db: Db, orderId: string, payment: { provider
     await announcePaid(tx, o, c?.name ?? "", ch?.name ?? "");
     await earnPointsForOrder(tx, o);
     await markCartRecovered(tx, o.customerId, o.id);
+    const [attr] = await tx.select({ campaignId: marketingAttributions.lastTouchCampaignId }).from(marketingAttributions).where(eq(marketingAttributions.orderId, o.id));
+    await recordOrderEvent(tx, "purchase_completed", o.id, { campaignId: attr?.campaignId ?? null, customerId: o.customerId });
     return { alreadyProcessed: false };
   });
 }

@@ -3,8 +3,11 @@
  * SQL predicate evaluated live against `customer_stats`/`orders`/`customers` — never a maintained list, so
  * a customer's segment membership is always correct as of the moment it's read. Thresholds are configurable
  * via `settings."crm"`, never hardcoded — see docs/CUSTOMER_SEGMENTS.md and docs/RFM.md.
+ * No `import "server-only"` guard: `getCustomerSegments()` is a transitive dependency of
+ * `lib/discounts/service.ts`'s `validateDiscount()` (Phase 7 segment-eligible promotions), which
+ * `lib/orders/service.ts` calls, which `scripts/seed.ts` also imports as a plain Node script (outside
+ * Next.js's module graph, where the guard would unconditionally throw regardless of the actual call site).
  */
-import "server-only";
 import { sql } from "drizzle-orm";
 import type { Db, DbOrTx } from "../db/client";
 import { settings } from "../db/schema";

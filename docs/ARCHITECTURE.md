@@ -14,6 +14,9 @@
  │              fail, status, refund)                                       │
  │  inventory/  row-locked stock changes, reservations, restock, adjust     │
  │  discounts/  server-side validation, atomic usage                        │
+ │  marketing/  campaigns, promotions, email, event tracking (Phase 7)      │
+ │  purchasing/ suppliers, purchase orders, receiving, stocktake (Phase 8)  │
+ │  finance/    expenses, summary, cash flow, reconciliation, tax (Phase 9) │
  │  analytics/  SQL aggregates, date ranges in the business time zone       │
  │  auth/       permissions.ts (role matrix) · session.ts (who is calling)  │
  │  audit.ts    audit log · notifications · pg_notify events                │
@@ -73,14 +76,19 @@ src/lib/payments         Stripe client + checkout session creation (server-only)
 src/lib/storefront       storefront read models (catalog, account, wishlist, shipping)
 src/lib/fulfillment      Phase 5: stage advancement, picking, packages, shipment status, the fulfillment rollup
 src/lib/returns          Phase 5: return request → inspection → refund workflow, return policy
-src/lib/analytics        sales/products/customers/channels; Phase 5: shipping.ts, returns.ts; Phase 6: retention.ts, wishlist.ts
+src/lib/analytics        sales/products/customers/channels; Phase 5: shipping.ts, returns.ts; Phase 6: retention.ts, wishlist.ts; Phase 7: marketing.ts; Phase 8: purchasing.ts
 src/lib/crm              Phase 6: tags, notes, communications, consent, segments, RFM, merge, anonymize
 src/lib/loyalty          Phase 6: points, tiers, rewards, redemption — reuses the discount engine
 src/lib/reviews          Phase 6: review submission/eligibility, moderation history
-src/lib/marketing        Phase 6: abandoned-cart tracking (signed-in customers only)
+src/lib/marketing        Phase 6: abandoned-cart tracking (signed-in customers only); Phase 7: campaigns.ts,
+                         promotions.ts, email-campaigns.ts, events.ts, settings.ts
+src/lib/purchasing       Phase 8: suppliers.ts, orders.ts, receiving.ts, stocktake.ts, pdf.ts
+src/lib/finance          Phase 9: expenses.ts, expense-categories.ts, summary.ts, cash-flow.ts,
+                         reconciliation.ts, snapshots.ts, tax.ts, customer-payments.ts, supplier-payments.ts,
+                         refunds.ts, product-profitability.ts, inventory-value.ts
 src/lib/                 all business logic (server-only)
 src/middleware.ts        coarse sign-in gate + Supabase session refresh for /admin
-drizzle/                 SQL migrations (0000 schema, 0001 views + RLS, 0002 dashboard, 0003+ Phase 4: payment_events, shipping_methods, refund/tracking columns; 0007+0009+0010 Phase 5: fulfillment/shipping/returns tables + RLS)
+drizzle/                 SQL migrations (0000 schema, 0001 views + RLS, 0002 dashboard, 0003+ Phase 4: payment_events, shipping_methods, refund/tracking columns; 0007+0009+0010 Phase 5: fulfillment/shipping/returns tables + RLS; 0011-0013 Phase 6: CRM/loyalty tables + RLS; 0014-0015 Phase 7: marketing tables + RLS; 0016-0017 Phase 8: purchasing/supplier tables + RLS + variant_stock view update; 0018-0019 Phase 9: finance tables + RLS)
 scripts/                 migrate, seed (+ data/catalog.json)
 tests/                   integration tests (real Postgres, real Stripe test mode)
 docs/                    this documentation

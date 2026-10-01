@@ -41,7 +41,7 @@ export async function listProducts(db: DbOrTx, o: { q?: string; category?: strin
 }
 
 export type VariantRow = {
-  id: string; sku: string; barcode: string | null; material: string; color: string | null; size: string | null; gemstone: string | null; label: string; status: string;
+  id: string; sku: string; barcode: string | null; material: string; color: string | null; size: string | null; gemstone: string | null; style: string | null; label: string; status: string;
   sellingPriceCents: number; costPriceCents: number; compareAtPriceCents: number | null; weightMg: number;
   stockQuantity: number; reservedQuantity: number; availableStock: number; reorderLevel: number; stockStatus: string; inventoryValueCents: number; image: string | null;
 };
@@ -51,7 +51,7 @@ export async function getProduct(db: DbOrTx, id: string) {
   if (!p) return null;
   const [variants, images, revs, cats, cols] = await Promise.all([
     rows<Record<string, string | null>>(db, sql`
-      select v.id, v.sku, v.barcode, v.material, v.color, v.size, v.gemstone, v.status, v.selling_price_cents, v.cost_price_cents, v.compare_at_price_cents, v.weight_mg,
+      select v.id, v.sku, v.barcode, v.material, v.color, v.size, v.gemstone, v.style, v.status, v.selling_price_cents, v.cost_price_cents, v.compare_at_price_cents, v.weight_mg,
              vs.variant_label, vs.stock_quantity, vs.reserved_quantity, vs.available_stock, vs.reorder_level, vs.stock_status, vs.inventory_value_cents,
              ${variantImage("v.product_id", "v.material")} as image
       from product_variants v join variant_stock vs on vs.variant_id = v.id where v.product_id = ${id} order by v.material, v.sku`),
@@ -63,7 +63,7 @@ export async function getProduct(db: DbOrTx, id: string) {
   return {
     product: p, images, reviews: revs, categories: cats, collections: cols,
     variants: variants.map((v): VariantRow => ({
-      id: v.id!, sku: v.sku!, barcode: v.barcode ?? null, material: v.material!, color: v.color ?? null, size: v.size ?? null, gemstone: v.gemstone ?? null, label: v.variant_label!, status: v.status!,
+      id: v.id!, sku: v.sku!, barcode: v.barcode ?? null, material: v.material!, color: v.color ?? null, size: v.size ?? null, gemstone: v.gemstone ?? null, style: v.style ?? null, label: v.variant_label!, status: v.status!,
       sellingPriceCents: n(v.selling_price_cents), costPriceCents: n(v.cost_price_cents), compareAtPriceCents: v.compare_at_price_cents == null ? null : n(v.compare_at_price_cents), weightMg: n(v.weight_mg),
       stockQuantity: n(v.stock_quantity), reservedQuantity: n(v.reserved_quantity), availableStock: n(v.available_stock), reorderLevel: n(v.reorder_level), stockStatus: v.stock_status!, inventoryValueCents: n(v.inventory_value_cents), image: v.image ?? null,
     })),

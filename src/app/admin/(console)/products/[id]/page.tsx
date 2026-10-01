@@ -6,6 +6,8 @@ import { resolveRange } from "@/lib/analytics/service";
 import { guard } from "@/lib/admin/guard";
 import { getProduct, getProductAnalytics, type VariantRow } from "@/lib/admin/products";
 import { listSuppliers } from "@/lib/admin/inventory";
+import { getCostHistory, getPriceHistory } from "@/lib/admin/purchasing";
+import { listSuppliersForVariant } from "@/lib/purchasing/suppliers";
 import { one, parseRange, rangeLabel, type SearchParams } from "@/lib/admin/range";
 import { safe } from "@/lib/admin/safe";
 import { dateShort, dateTime, int, money, moneyKpi, pct } from "@/lib/format";
@@ -18,12 +20,14 @@ import { EmptyState, ErrorState } from "@/components/admin/states";
 import { Thumb } from "@/components/admin/thumb";
 import { AddVariantForm, ImageManager, ProductGeneralForm, ProductMenu, ProductSeoForm, VariantRowEditor } from "@/components/admin/product-forms";
 import { AdjustButton, RestockButton } from "@/components/admin/stock-actions";
+import { AddProductSupplierButton, RemoveSupplierProductButton } from "@/components/admin/purchasing-forms";
+import { suppliers as suppliersTable } from "@/lib/db/schema";
 import { MiniTrend } from "@/components/admin/charts";
 import { KPICard } from "@/components/admin/kpi-card";
 import { ReviewActions } from "@/components/admin/review-actions";
 
 export const metadata = { title: "Product" };
-const TABS = ["general", "variants", "images", "inventory", "seo", "analytics", "reviews"] as const;
+const TABS = ["general", "variants", "images", "inventory", "seo", "analytics", "reviews", "suppliers", "cost-history", "price-history"] as const;
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<SearchParams> }) {
   const g = await guard("products:read");
@@ -44,7 +48,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       <Link href="/admin/products" className="inline-flex items-center gap-1 text-[13px] text-muted hover:text-fg"><ChevronLeft className="size-4" />Products</Link>
       <PageHeader title={p.name} description={<span className="inline-flex flex-wrap items-center gap-2"><StatusBadge status={p.status} />{cat?.name} · {variants.length} variants · {int(stock)} available</span>}
         actions={<ProductMenu id={p.id} slug={p.slug} name={p.name} status={p.status} canWrite={!ro} />}>
-        <TabLinks current={tab} tabs={[{ value: "general", label: "General" }, { value: "variants", label: "Variants", count: variants.length }, { value: "images", label: "Images", count: images.length }, { value: "inventory", label: "Inventory" }, { value: "seo", label: "SEO" }, { value: "analytics", label: "Analytics" }, { value: "reviews", label: "Reviews", count: reviews.length }]} />
+        <TabLinks current={tab} tabs={[{ value: "general", label: "General" }, { value: "variants", label: "Variants", count: variants.length }, { value: "images", label: "Images", count: images.length }, { value: "inventory", label: "Inventory" }, { value: "seo", label: "SEO" }, { value: "analytics", label: "Analytics" }, { value: "reviews", label: "Reviews", count: reviews.length }, { value: "suppliers", label: "Suppliers" }, { value: "cost-history", label: "Cost history" }, { value: "price-history", label: "Price history" }]} />
       </PageHeader>
 
       {tab === "general" && <ProductGeneralForm p={{ ...p, collectionId: p.collectionId }} categories={categories} collections={collections} readOnly={ro} />}
@@ -65,6 +69,12 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       {tab === "seo" && <ProductSeoForm p={p} readOnly={ro} />}
 
       {tab === "analytics" && <AnalyticsTab db={db} productId={p.id} sp={sp} canOrders={g.can("orders:read")} />}
+
+      {tab === "suppliers" && <SuppliersTab db={db} variants={variants} canWrite={!ro} />}
+
+      {tab === "cost-history" && <CostHistoryTab db={db} variants={variants} sp={sp} />}
+
+      {tab === "price-history" && <PriceHistoryTab db={db} variants={variants} sp={sp} />}
 
       {tab === "reviews" && (
         <Card>
@@ -98,6 +108,79 @@ async function InventoryTab({ db, variants, productName, canStock }: { db: Retur
     );
   }
 
+
+async function SuppliersTab({ db, variants, canWrite }: { db: ReturnType<typeof getDb>; variants: VariantRow[]; canWrite: boolean }) {
+  const rows = (await Promise.all(variants.map(async (v) => ({ variant: v, suppliers: await listSuppliersForVariant(db, v.id) })))).flatMap((x) => x.suppliers.map((s) => ({ ...s, variant: x.variant })));
+  const allSuppliers = await db.select({ id: suppliersTable.id, name: suppliersTable.name }).from(suppliersTable);
+  return (
+    <Card>
+      <CardHeader title="Suppliers" description="Every supplier that offers a variant of this product, and their terms. Never auto-selected — choose one when creating a purchase order." />
+      {!rows.length ? <EmptyState title="No suppliers linked yet" description="Add one from a supplier's own profile page." /> : (
+        <div className="relative overflow-x-auto"><table className="w-full text-[13px]"><caption className="sr-only">Suppliers</caption>
+          <thead><tr className="border-b border-line text-left text-xs text-muted"><th className="py-2 pl-4 font-medium">Variant</th><th className="px-2 font-medium">Supplier</th><th className="num px-2 font-medium">Price</th><th className="num hidden px-2 font-medium md:table-cell">MOQ</th><th className="num hidden px-2 font-medium lg:table-cell">Lead time</th><th className="hidden px-2 font-medium xl:table-cell">Last purchase</th><th className="px-2 font-medium">Preferred</th><th className="px-2 pr-4" /></tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.id} className="border-b border-line-soft last:border-0">
+              <td className="py-2 pl-4">{r.variant.label} <span className="text-xs text-muted">({r.variant.sku})</span></td>
+              <td className="px-2">{r.supplierName} <StatusBadge status={r.supplierStatus} /></td>
+              <td className="num px-2">{money(r.purchasePriceCents)}</td>
+              <td className="num hidden px-2 md:table-cell">{r.minimumOrderQuantity ?? "—"}</td>
+              <td className="num hidden px-2 lg:table-cell">{r.leadTimeDays != null ? `${r.leadTimeDays}d` : "—"}</td>
+              <td className="hidden px-2 xl:table-cell">{r.lastPurchaseDate ? `${dateShort(r.lastPurchaseDate)} · ${money(r.lastPurchasePriceCents ?? 0)}` : "—"}</td>
+              <td className="px-2">{r.preferredSupplier ? <StatusBadge status="ACTIVE" label="Preferred" /> : "—"}</td>
+              <td className="py-2 pr-4 text-right">{canWrite && <RemoveSupplierProductButton id={r.id} />}</td>
+            </tr>))}</tbody></table></div>
+      )}
+      {canWrite && (
+        <CardBody className="border-t border-line-soft">
+          {!allSuppliers.length ? <p className="text-xs text-subtle">Add a supplier first from the Suppliers page.</p> : (
+            <>
+              <p className="mb-2 text-xs text-muted">Add a supplier for one of this product&apos;s variants:</p>
+              <div className="flex flex-wrap gap-2">{variants.map((v) => <AddProductSupplierButton key={v.id} variantId={v.id} variantLabel={v.label} suppliers={allSuppliers} />)}</div>
+            </>
+          )}
+        </CardBody>
+      )}
+    </Card>
+  );
+}
+
+async function CostHistoryTab({ db, variants, sp }: { db: ReturnType<typeof getDb>; variants: VariantRow[]; sp: SearchParams }) {
+  const res = await safe("cost-history", async () => (await Promise.all(variants.map(async (v) => (await getCostHistory(db, v.id)).map((h) => ({ ...h, sku: v.sku, label: v.label }))))).flat().sort((a, b) => b.date.getTime() - a.date.getTime()), one(sp.fail));
+  if (!res.ok) return <Card><ErrorState message="Unable to load cost history." /></Card>;
+  return (
+    <Card>
+      <CardHeader title="Cost history" description="From the inventory ledger — every purchase/restock that recorded a unit cost. Helps spot supplier price changes." />
+      {!res.data.length ? <EmptyState title="No purchase history yet" /> : (
+        <div className="relative overflow-x-auto"><table className="w-full text-[13px]"><caption className="sr-only">Cost history</caption>
+          <thead><tr className="border-b border-line text-left text-xs text-muted"><th className="py-2 pl-4 font-medium">Date</th><th className="px-2 font-medium">Variant</th><th className="px-2 font-medium">Supplier</th><th className="num px-2 font-medium">Unit cost</th><th className="num px-2 font-medium">Quantity</th><th className="hidden px-2 pr-4 font-medium md:table-cell">Reference</th></tr></thead>
+          <tbody>{res.data.map((h, i) => (
+            <tr key={i} className="border-b border-line-soft last:border-0">
+              <td className="py-2 pl-4">{dateShort(h.date)}</td><td className="px-2">{h.label} <span className="text-xs text-muted">({h.sku})</span></td><td className="px-2">{h.supplierName ?? "—"}</td>
+              <td className="num px-2">{money(h.unitCostCents)}</td><td className="num px-2">{h.quantity}</td><td className="hidden px-2 pr-4 text-muted md:table-cell">{h.referenceId ?? "—"}</td>
+            </tr>))}</tbody></table></div>
+      )}
+    </Card>
+  );
+}
+
+async function PriceHistoryTab({ db, variants, sp }: { db: ReturnType<typeof getDb>; variants: VariantRow[]; sp: SearchParams }) {
+  const res = await safe("price-history", async () => (await Promise.all(variants.map(async (v) => (await getPriceHistory(db, v.id)).map((h) => ({ ...h, sku: v.sku, label: v.label }))))).flat().sort((a, b) => b.effectiveAt.getTime() - a.effectiveAt.getTime()), one(sp.fail));
+  if (!res.ok) return <Card><ErrorState message="Unable to load price history." /></Card>;
+  return (
+    <Card>
+      <CardHeader title="Price history" description="Every selling-price or compare-at change, permanent and never overwritten." />
+      {!res.data.length ? <EmptyState title="No price changes recorded yet" /> : (
+        <div className="relative overflow-x-auto"><table className="w-full text-[13px]"><caption className="sr-only">Price history</caption>
+          <thead><tr className="border-b border-line text-left text-xs text-muted"><th className="py-2 pl-4 font-medium">Date</th><th className="px-2 font-medium">Variant</th><th className="num px-2 font-medium">Selling price</th><th className="num px-2 font-medium">Compare-at</th><th className="hidden px-2 pr-4 font-medium md:table-cell">Changed by</th></tr></thead>
+          <tbody>{res.data.map((h, i) => (
+            <tr key={i} className="border-b border-line-soft last:border-0">
+              <td className="py-2 pl-4">{dateShort(h.effectiveAt)}</td><td className="px-2">{h.label} <span className="text-xs text-muted">({h.sku})</span></td>
+              <td className="num px-2">{money(h.sellingPriceCents)}</td><td className="num px-2">{h.compareAtPriceCents != null ? money(h.compareAtPriceCents) : "—"}</td><td className="hidden px-2 pr-4 text-muted md:table-cell">{h.changedBy ?? "—"}</td>
+            </tr>))}</tbody></table></div>
+      )}
+    </Card>
+  );
+}
 
 async function AnalyticsTab({ db, productId, sp, canOrders }: { db: ReturnType<typeof getDb>; productId: string; sp: SearchParams; canOrders: boolean }) {
   const parsed = parseRange(sp), r = await resolveRange(db, parsed.key, parsed.custom);

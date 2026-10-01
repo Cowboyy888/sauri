@@ -23,6 +23,9 @@ Updated in Phase 2 to brief §46. Permissions are `area:read` and `area:write` (
 | Audit log | edit | – | – | – | – |
 | Staff and roles, settings | edit | – | – | – | – |
 | Loyalty (Phase 6) | edit | **view** | **view** | – | – |
+| Marketing (Phase 7) | edit | **edit** | **view** | – | **view** |
+| Purchasing (Phase 8) | edit | **edit** | **view** | **view** | **view** |
+| Finance (Phase 9) | edit | **edit** | – | – | – |
 
 **Change from Phase 1:** ADMIN previously also managed discounts, reviews and content, and could read the audit log. Brief §46 limits ADMIN to dashboard, sales, orders, products, inventory, customers and reports, so those areas are now OWNER-only.
 
@@ -42,6 +45,34 @@ communications, consent, segment/RFM thresholds, export, merge, anonymize) reuse
 already held by ADMIN and SALES ("full customer management" / "customer profiles and communication" per
 brief §42) — deliberately, so a second CRM-specific permission area never had to exist.
 
+**Phase 7:** one new permission area, `marketing` — see docs/CAMPAIGNS.md's RBAC section. Deliberately
+**separate** from the pre-existing, OWNER-only `discounts` area: the brief explicitly upgrades ADMIN to
+managing campaigns and promotions (`marketing:write`), which is a real, intentional broadening beyond what
+ADMIN could do with the Phase 2 discounts page — not an oversight. SALES gets read-only marketing
+(customer/campaign data, per "view customer campaign data where permitted"); VIEWER's existing
+read-only-everything posture extends to marketing analytics too (`marketing:read`); INVENTORY has none,
+consistent with its existing lack of `customers`/`sales` access.
+
+**Phase 8:** one new permission area, `purchasing` — suppliers and purchase orders (create, edit, approve,
+cancel, documents, email, payments). OWNER and ADMIN get full write access (brief §50: "ADMIN: Products,
+suppliers, purchasing"). INVENTORY, SALES and VIEWER get read-only `purchasing` — INVENTORY specifically
+does **not** get `purchasing:write`, because receiving and stocktake (its actual job per brief §50) are
+gated on the pre-existing `inventory:write` instead, which it already has; this is a deliberate separation
+between "who can commercially commit to a supplier/PO" and "who can physically receive stock or count it" —
+see docs/PHASE_8_AUDIT.md. Cost changes and inventory adjustments were already sensitively gated before this
+phase (`inventory:write`); PO approval now gets the same treatment via `purchasing:write`.
+
+**Phase 9:** one new permission area, `finance` — expenses (create/edit/approve/reject/mark paid/delete),
+tax configuration, reconciliation, and report snapshots. Unlike `purchasing`/`marketing` (Phases 7-8), this
+is **not** broadened beyond OWNER/ADMIN — the brief's own wording ("OWNER/ADMIN: create, edit, approve...
+Other roles: follow existing RBAC") matches the pre-existing `reports` area exactly, which SALES/INVENTORY/
+VIEWER already have no access to. So `finance` is deliberately the same shape as `reports`/`discounts`
+(OWNER+ADMIN only), not the wider `purchasing`/`marketing` pattern — see docs/FINANCE_AUDIT.md §7. Two
+finance pages reuse a *different*, pre-existing permission on purpose: recording a supplier payment from
+`/admin/finance/supplier-payments` still requires `purchasing:write` (unchanged from Phase 8 — Phase 9 adds
+no second write path for that action), and the customer-payments/refunds/revenue pages are read-only views
+over `orders:read`-adjacent data gated by `finance:read`, not a new `orders` permission.
+
 In the UI, the sidebar and search only offer what the role can open. Opening a URL directly without permission shows an access-denied page, and that page's data is never loaded.
 
 ## Enforcement: never by hiding buttons
@@ -59,7 +90,7 @@ Sensitive customer data (emails, addresses, order history) is only readable thro
 
 ## Audit log
 
-`audit_logs` records the user, action, entity, entity id, old value, new value and time. Actions written today include: Created order, Changed order status, Refunded order, Changed stock (restock or adjustment, with the reason), Changed cost price (weighted average), Changed reorder level, and Created discount. Price changes, product create and delete, and role changes are audited by the Phase 2 admin actions, using the same `audit()` helper.
+`audit_logs` records the user, action, entity, entity id, old value, new value and time. Actions written today include: Created order, Changed order status, Refunded order, Changed stock (restock or adjustment, with the reason), Changed cost price (weighted average), Changed reorder level, and Created discount. Price changes, product create and delete, and role changes are audited by the Phase 2 admin actions, using the same `audit()` helper. Phase 9 adds: Created/updated/submitted/approved/rejected/paid/cancelled/deleted expense, Changed tax configuration, Ran/recorded payment reconciliation, Reviewed reconciliation record, and Saved/deleted financial report snapshot — the same `audit()` helper, no second audit table (docs/FINANCE_AUDIT.md).
 
 ## Adding a new protected action
 

@@ -4,7 +4,7 @@
  */
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { categories, inventory, inventoryMovements, orderItems, productImages, productVariants, products, settings, users } from "../db/schema";
+import { categories, inventory, inventoryMovements, orderItems, productImages, productPriceHistory, productVariants, products, settings, users } from "../db/schema";
 import { NotFoundError, ValidationError } from "../errors";
 import { type Actor, type Role, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
@@ -24,8 +24,8 @@ function checkImageUrl(url: string) {
 export type NewProductInput = {
   name: string; slug?: string; shortDescription?: string; description?: string; categoryId: string; collectionId?: string | null;
   status: "draft" | "active" | "archived"; featured?: boolean; bestSeller?: boolean; newArrival?: boolean;
-  seoTitle?: string; seoDescription?: string; tags?: string[];
-  material: string; color?: string | null; size?: string | null; gemstone?: string | null;
+  seoTitle?: string; seoDescription?: string; canonicalUrl?: string; brand?: string; careInstructions?: string; tags?: string[];
+  material: string; color?: string | null; size?: string | null; gemstone?: string | null; style?: string | null;
   sku: string; barcode?: string | null; costPriceCents: number; sellingPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number;
   reorderLevel?: number; imageUrls?: string[];
 };
@@ -53,20 +53,22 @@ export async function createProduct(db: Db, actor: Actor, input: NewProductInput
     const [p] = await tx.insert(products).values({
       name, slug, code, shortDescription: input.shortDescription?.trim() ?? "", description: input.description?.trim() ?? "", categoryId: cat.id, collectionId: input.collectionId || null,
       status: input.status, featured: !!input.featured, bestSeller: !!input.bestSeller, newArrival: !!input.newArrival,
-      seoTitle: input.seoTitle?.trim() || `${name} | SAURI`, seoDescription: input.seoDescription?.trim() || input.shortDescription?.trim() || null, tags: input.tags ?? [],
+      seoTitle: input.seoTitle?.trim() || `${name} | SAURI`, seoDescription: input.seoDescription?.trim() || input.shortDescription?.trim() || null,
+      canonicalUrl: input.canonicalUrl?.trim() || null, brand: input.brand?.trim() || null, careInstructions: input.careInstructions?.trim() || null, tags: input.tags ?? [],
     }).returning();
     const [v] = await tx.insert(productVariants).values({
-      productId: p!.id, sku, barcode: input.barcode?.trim() || null, material: input.material, color: input.color || null, size: input.size || null, gemstone: input.gemstone || null,
+      productId: p!.id, sku, barcode: input.barcode?.trim() || null, material: input.material, color: input.color || null, size: input.size || null, gemstone: input.gemstone || null, style: input.style || null,
       costPriceCents: input.costPriceCents, sellingPriceCents: input.sellingPriceCents, compareAtPriceCents: input.compareAtPriceCents ?? null, weightMg: input.weightMg ?? 0,
     }).returning();
     await tx.insert(inventory).values({ variantId: v!.id, stockQuantity: 0, reorderLevel: input.reorderLevel ?? 5 });
+    await tx.insert(productPriceHistory).values({ variantId: v!.id, sellingPriceCents: input.sellingPriceCents, compareAtPriceCents: input.compareAtPriceCents ?? null, changedByUserId: actor.userId });
     if (input.imageUrls?.length) await tx.insert(productImages).values(input.imageUrls.map((url, i) => ({ productId: p!.id, variantId: i === 0 ? v!.id : null, url, alt: name, position: i })));
     await audit(tx, actor, "Created product", "product", p!.id, undefined, { name, sku, sellingPriceCents: input.sellingPriceCents, costPriceCents: input.costPriceCents, status: input.status });
     return p!;
   });
 }
 
-export type ProductPatch = Partial<Pick<NewProductInput, "name" | "slug" | "shortDescription" | "description" | "categoryId" | "collectionId" | "status" | "featured" | "bestSeller" | "newArrival" | "seoTitle" | "seoDescription" | "tags">>;
+export type ProductPatch = Partial<Pick<NewProductInput, "name" | "slug" | "shortDescription" | "description" | "categoryId" | "collectionId" | "status" | "featured" | "bestSeller" | "newArrival" | "seoTitle" | "seoDescription" | "canonicalUrl" | "brand" | "careInstructions" | "tags">>;
 export async function updateProduct(db: Db, actor: Actor, id: string, patch: ProductPatch) {
   assertCan(actor, "products:write");
   return db.transaction(async (tx) => {
@@ -90,7 +92,7 @@ export async function updateProduct(db: Db, actor: Actor, id: string, patch: Pro
   });
 }
 
-export type VariantPatch = { sellingPriceCents?: number; costPriceCents?: number; compareAtPriceCents?: number | null; barcode?: string | null; weightMg?: number; status?: "active" | "inactive" };
+export type VariantPatch = { sellingPriceCents?: number; costPriceCents?: number; compareAtPriceCents?: number | null; barcode?: string | null; weightMg?: number; status?: "active" | "inactive"; style?: string | null };
 export async function updateVariant(db: Db, actor: Actor, variantId: string, patch: VariantPatch) {
   assertCan(actor, "products:write");
   return db.transaction(async (tx) => {
@@ -104,10 +106,16 @@ export async function updateVariant(db: Db, actor: Actor, variantId: string, pat
     const old = Object.fromEntries(Object.keys(changed).map((k) => [k, (before as Record<string, unknown>)[k]]));
     const action = "sellingPriceCents" in changed ? "Changed product price" : "costPriceCents" in changed ? "Changed cost price" : "Updated variant";
     await audit(tx, actor, action, "product_variant", before.sku, old, changed);
+    // Phase 8 (brief §38): a permanent, append-only price history — never overwritten, one write path.
+    if ("sellingPriceCents" in changed || "compareAtPriceCents" in changed) {
+      await tx.insert(productPriceHistory).values({
+        variantId, sellingPriceCents: merged.sellingPriceCents, compareAtPriceCents: merged.compareAtPriceCents ?? null, changedByUserId: actor.userId,
+      });
+    }
   });
 }
 
-export async function addVariant(db: Db, actor: Actor, productId: string, v: { sku: string; material: string; color?: string | null; size?: string | null; gemstone?: string | null; barcode?: string | null; sellingPriceCents: number; costPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number; reorderLevel?: number }) {
+export async function addVariant(db: Db, actor: Actor, productId: string, v: { sku: string; material: string; color?: string | null; size?: string | null; gemstone?: string | null; style?: string | null; barcode?: string | null; sellingPriceCents: number; costPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number; reorderLevel?: number }) {
   assertCan(actor, "products:write");
   const sku = v.sku.trim().toUpperCase();
   if (!/^[A-Z0-9-]{3,40}$/.test(sku)) throw new ValidationError("SKU must be 3–40 letters, numbers or dashes.");
@@ -118,6 +126,7 @@ export async function addVariant(db: Db, actor: Actor, productId: string, v: { s
     if ((await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, sku))).length) throw new ValidationError(`SKU ${sku} is already in use.`);
     const [row] = await tx.insert(productVariants).values({ productId, sku, material: v.material, color: v.color || null, size: v.size || null, gemstone: v.gemstone || null, barcode: v.barcode || null, sellingPriceCents: v.sellingPriceCents, costPriceCents: v.costPriceCents, compareAtPriceCents: v.compareAtPriceCents ?? null, weightMg: v.weightMg ?? 0 }).returning();
     await tx.insert(inventory).values({ variantId: row!.id, stockQuantity: 0, reorderLevel: v.reorderLevel ?? 5 });
+    await tx.insert(productPriceHistory).values({ variantId: row!.id, sellingPriceCents: v.sellingPriceCents, compareAtPriceCents: v.compareAtPriceCents ?? null, changedByUserId: actor.userId });
     await audit(tx, actor, "Added variant", "product_variant", sku, undefined, { productId, sellingPriceCents: v.sellingPriceCents, costPriceCents: v.costPriceCents });
     return row!;
   });
@@ -170,6 +179,45 @@ export async function deleteProduct(db: Db, actor: Actor, id: string) {
     if ((moved?.c ?? 0) > 0) throw new ValidationError(`${p.name} has stock history, so it can't be deleted. Archive it instead.`);
     await tx.delete(products).where(eq(products.id, id));
     await audit(tx, actor, "Deleted product", "product", id, { name: p.name, slug: p.slug }, undefined);
+  });
+}
+
+/* ---------------------------------------------------------- bulk actions (Phase 8 brief §6) */
+export async function bulkSetProductStatus(db: Db, actor: Actor, ids: string[], status: "active" | "archived") {
+  assertCan(actor, "products:write");
+  if (!ids.length) return;
+  return db.transaction(async (tx) => {
+    await tx.update(products).set({ status }).where(inArray(products.id, ids));
+    await audit(tx, actor, status === "archived" ? "Bulk-archived products" : "Bulk-activated products", "product", null, undefined, { count: ids.length, status });
+  });
+}
+export async function bulkSetCategory(db: Db, actor: Actor, ids: string[], categoryId: string) {
+  assertCan(actor, "products:write");
+  if (!ids.length) return;
+  return db.transaction(async (tx) => {
+    if (!(await tx.select({ id: categories.id }).from(categories).where(eq(categories.id, categoryId))).length) throw new ValidationError("Choose a category.");
+    await tx.update(products).set({ categoryId }).where(inArray(products.id, ids));
+    await audit(tx, actor, "Bulk-updated category", "product", null, undefined, { count: ids.length, categoryId });
+  });
+}
+export async function bulkSetCollection(db: Db, actor: Actor, ids: string[], collectionId: string | null) {
+  assertCan(actor, "products:write");
+  if (!ids.length) return;
+  await db.transaction(async (tx) => {
+    await tx.update(products).set({ collectionId }).where(inArray(products.id, ids));
+    await audit(tx, actor, "Bulk-updated collection", "product", null, undefined, { count: ids.length, collectionId });
+  });
+}
+/** Sets the reorder level for every variant of the given products — never a price change (brief §6 says
+ *  never allow a dangerous bulk price change without confirmation; this phase doesn't add bulk pricing at all). */
+export async function bulkSetReorderLevel(db: Db, actor: Actor, productIds: string[], level: number) {
+  assertCan(actor, "products:write");
+  if (!Number.isInteger(level) || level < 0) throw new ValidationError("Reorder level must be zero or more.");
+  if (!productIds.length) return;
+  await db.transaction(async (tx) => {
+    const variantIds = (await tx.select({ id: productVariants.id }).from(productVariants).where(inArray(productVariants.productId, productIds))).map((v) => v.id);
+    if (variantIds.length) await tx.update(inventory).set({ reorderLevel: level }).where(inArray(inventory.variantId, variantIds));
+    await audit(tx, actor, "Bulk-updated reorder level", "product", null, undefined, { productCount: productIds.length, level });
   });
 }
 

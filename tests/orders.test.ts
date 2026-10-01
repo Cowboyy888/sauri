@@ -142,7 +142,7 @@ describe("orders", () => {
 
   it("the order discount is allocated to lines and always sums exactly", async () => {
     const d = { type: "percent" as const, value: 10, categoryId: null, productId: null, maxDiscountCents: null };
-    const lines = [1_001, 2_003, 997].map((p, i) => ({ unitPriceCents: p, unitCostCents: 0, quantity: 1, productId: `p${i}`, categoryId: "c" }));
+    const lines = [1_001, 2_003, 997].map((p, i) => ({ unitPriceCents: p, unitCostCents: 0, quantity: 1, productId: `p${i}`, categoryId: "c", collectionId: null }));
     const shares = allocateDiscount(lines, d, 401);
     expect(shares.reduce((a, b) => a + b, 0)).toBe(401);
     const t = computeTotals(lines, d, { feePercentBp: 0, feeFixedCents: 0, shipsOrders: false, chargesShipping: false }, false);

@@ -1,5 +1,6 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { track } from "@/lib/storefront/track-client";
 
 export type CartPersonalization = { initial?: string; engraving?: string };
 export type CartLine = { variantId: string; quantity: number; personalization?: CartPersonalization };
@@ -48,6 +49,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
   const [shippingMethodId, setShippingMethodId] = useState<string | null>(null);
+  const lastTrackedCode = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -73,7 +75,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ lines, discountCode: discountCode || undefined, shippingMethodId: shippingMethodId || undefined }),
       })
         .then((r) => r.json())
-        .then((data) => setQuote(data))
+        .then((data) => {
+          setQuote(data);
+          if (discountCode && discountCode !== lastTrackedCode.current) {
+            lastTrackedCode.current = discountCode;
+            track(data?.discountError ? "coupon_failed" : "coupon_applied", { metadata: { code: discountCode } });
+          }
+        })
         .catch(() => { /* aborted or offline: keep the last known quote */ })
         .finally(() => setLoading(false));
     }, 200);
@@ -97,6 +105,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return [...prev, { variantId, quantity, personalization }];
     });
     setIsOpen(true);
+    track("cart_added", { metadata: { variantId, quantity } });
   }, []);
 
   const setQuantity = useCallback((variantId: string, quantity: number, personalization?: CartPersonalization) => {

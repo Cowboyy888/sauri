@@ -2,8 +2,10 @@ import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { guard } from "@/lib/admin/guard";
 import { abandonedCartKpis, listAbandonedCarts } from "@/lib/marketing/abandoned-carts";
+import { getRecoveryAnalytics } from "@/lib/analytics/marketing";
+import { resolveRange } from "@/lib/analytics/service";
 import { one, pageParams, type SearchParams } from "@/lib/admin/range";
-import { dateTimeFull, int, money } from "@/lib/format";
+import { dateTimeFull, int, money, pct } from "@/lib/format";
 import { PageHeader } from "@/components/admin/page-header";
 import { AccessDenied } from "@/components/admin/access-denied";
 import { Card } from "@/components/ui/card";
@@ -12,6 +14,7 @@ import { DataTable, Pagination } from "@/components/admin/data-table";
 import { EmptyState, ErrorState } from "@/components/admin/states";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { safe } from "@/lib/admin/safe";
+import { SendRecoveryButton } from "@/components/admin/marketing-forms";
 
 export const metadata = { title: "Abandoned Carts" };
 export const dynamic = "force-dynamic";
@@ -21,8 +24,10 @@ export default async function AbandonedCartsPage({ searchParams }: { searchParam
   const g = await guard("customers:read");
   if (!g.ok) return <AccessDenied role={g.staff.role} permission={g.permission} />;
   const sp = await searchParams, db = getDb(), { page, pageSize } = pageParams(sp);
-  const [kpis, res] = await Promise.all([
+  const range30d = await resolveRange(db, "30d");
+  const [kpis, recovery, res] = await Promise.all([
     abandonedCartKpis(db, THRESHOLD_HOURS),
+    getRecoveryAnalytics(db, range30d, THRESHOLD_HOURS),
     safe("carts", () => listAbandonedCarts(db, THRESHOLD_HOURS, page, pageSize), one(sp.fail)),
   ]);
 
@@ -33,6 +38,12 @@ export default async function AbandonedCartsPage({ searchParams }: { searchParam
         <KPICard label="Active carts" value={int(kpis.active)} change={null} comparison="" note={`Activity within ${THRESHOLD_HOURS}h`} />
         <KPICard label="Abandoned carts" value={int(kpis.abandoned)} change={null} comparison="" tone={kpis.abandoned > 0 ? "warn" : undefined} />
         <KPICard label="Open cart value" value={money(kpis.openCartValueCents)} change={null} comparison="" note="Active + abandoned" />
+      </section>
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Recovery figures (last 30 days)">
+        <KPICard label="Recovery rate" value={recovery.recoveryRate == null ? "—" : pct(recovery.recoveryRate)} change={null} comparison="" note="Last 30 days" />
+        <KPICard label="Recovered carts" value={int(recovery.recoveredCarts)} change={null} comparison="" note={`of ${int(recovery.abandonedCarts)} eligible`} />
+        <KPICard label="Recovered revenue" value={money(recovery.recoveredRevenueCents)} change={null} comparison="" />
+        <KPICard label="Net recovered revenue" value={money(recovery.netRecoveredRevenueCents)} change={null} comparison="" note={`− ${money(recovery.discountCostCents)} discount cost`} />
       </section>
       <Card>
         {!res.ok ? <ErrorState message="Unable to load carts." /> : !res.data.rows.length ? <EmptyState title="No tracked carts" /> : <>
@@ -45,6 +56,7 @@ export default async function AbandonedCartsPage({ searchParams }: { searchParam
               { key: "v", header: "Cart value", align: "right", cell: (c) => money(c.cartValueCents) },
               { key: "a", header: "Last activity", cell: (c) => dateTimeFull(c.lastActivityAt), hideBelow: "sm" },
               { key: "s", header: "Status", cell: (c) => <StatusBadge status={c.effectiveStatus} /> },
+              { key: "a", header: <span className="sr-only">Actions</span>, align: "right", cell: (c) => g.can("marketing:write") && c.effectiveStatus !== "recovered" ? <SendRecoveryButton cartId={c.id} /> : null },
             ]} />
           <Pagination page={page} pageSize={pageSize} total={res.data.total} basePath="/admin/marketing/abandoned-carts" params={{}} />
         </>}

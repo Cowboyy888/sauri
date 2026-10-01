@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BarChart3, BookOpen, Boxes, ChevronsLeft, ChevronsRight, Gem, LayoutDashboard, LineChart, LogOut, Menu as MenuIcon, Percent,
-  Receipt, Settings, ShoppingBag, Star, UserRound, Users, FileSpreadsheet, History, Truck, Undo2, Award, ShoppingCart,
+  Receipt, Settings, ShoppingBag, Star, UserRound, Users, FileSpreadsheet, History, Truck, Undo2, Award, ShoppingCart, Building2, ClipboardList, Landmark,
 } from "lucide-react";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "../ui/menu";
@@ -14,10 +14,10 @@ import { NotificationDropdown } from "./notifications";
 import { DateRangePicker } from "./date-range-picker";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; match?: string[] };
-const ICONS = { dashboard: LayoutDashboard, sales: LineChart, orders: ShoppingBag, products: Gem, inventory: Boxes, customers: Users, analytics: BarChart3, discounts: Percent, reports: FileSpreadsheet, reviews: Star, content: BookOpen, settings: Settings, audit: History, receipt: Receipt, fulfillment: Truck, returns: Undo2, loyalty: Award, marketing: ShoppingCart };
+const ICONS = { dashboard: LayoutDashboard, sales: LineChart, orders: ShoppingBag, products: Gem, inventory: Boxes, customers: Users, analytics: BarChart3, discounts: Percent, reports: FileSpreadsheet, reviews: Star, content: BookOpen, settings: Settings, audit: History, receipt: Receipt, fulfillment: Truck, returns: Undo2, loyalty: Award, marketing: ShoppingCart, suppliers: Building2, purchases: ClipboardList, finance: Landmark };
 export type ShellUser = { name: string; email: string; role: string };
 
-const RANGE_PATHS = ["/admin/dashboard", "/admin/analytics", "/admin/reports", "/admin/orders", "/admin/products"];
+const RANGE_PATHS = ["/admin/dashboard", "/admin/analytics", "/admin/reports", "/admin/orders", "/admin/products", "/admin/marketing", "/admin/finance"];
 
 function NavList({ items, collapsed, onNavigate }: { items: NavItem[]; collapsed?: boolean; onNavigate?: () => void }) {
   const path = usePathname();
@@ -71,7 +71,8 @@ export function AdminShell({ nav, user, signOut, searchScopes, children }: { nav
   useEffect(() => { try { setCollapsed(localStorage.getItem("sauri:nav") === "1"); } catch { /* storage unavailable */ } }, []);
   const toggle = () => { setCollapsed((c) => { try { localStorage.setItem("sauri:nav", c ? "0" : "1"); } catch { /* ignore */ } return !c; }); };
   // Date range applies to analytics-style pages (and a product's analytics); not to order detail or forms.
-  const showRange = RANGE_PATHS.some((p) => path === p || path.startsWith(p + "/")) && !/^\/admin\/orders\/[^/]+$/.test(path) && path !== "/admin/products/new";
+  // /admin/marketing itself is the range-bound hub; its campaign/promotion/email/calendar sub-pages manage their own lists, not a date range.
+  const showRange = RANGE_PATHS.some((p) => path === p || path.startsWith(p + "/")) && !/^\/admin\/orders\/[^/]+$/.test(path) && path !== "/admin/products/new" && !(path.startsWith("/admin/marketing/") && path !== "/admin/marketing");
 
   return (
     <div className="admin min-h-dvh md:flex">

@@ -9,7 +9,7 @@ import { AccessDenied } from "@/components/admin/access-denied";
 import { RefreshControl } from "@/components/admin/live";
 import { CardSkeleton, KpiSkeleton } from "@/components/admin/skeleton";
 import {
-  CategorySection, ChannelSection, FulfillmentKpiSection, InventorySummarySection, KpiSection, LowStockSection, OutOfStockSection, ProfitSection, RecentOrdersSection,
+  CategorySection, ChannelSection, FinanceKpiSection, FulfillmentKpiSection, InventorySummarySection, KpiSection, LowStockSection, OutOfStockSection, ProfitSection, RecentOrdersSection,
   RevenueBreakdownSection, SalesOverviewSection, TopProductsSection,
 } from "@/components/admin/dashboard/sections";
 
@@ -23,7 +23,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const db = getDb();
   const r = await resolveRange(db, parsed.key, parsed.custom);
   const text = rangeLabel(parsed);
-  const ctx = { db, r, parsed, fail: one(sp.fail), canWriteInventory: g.can("inventory:write"), canOrders: g.can("orders:read"), canProducts: g.can("products:read") };
+  const ctx = { db, r, parsed, fail: one(sp.fail), canWriteInventory: g.can("inventory:write"), canOrders: g.can("orders:read"), canProducts: g.can("products:read"), canFinance: g.can("finance:read") };
   // Re-mount sections when the range changes so skeletons show while new numbers stream in.
   const k = JSON.stringify(rangeQuery(parsed));
 
@@ -34,6 +34,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <div className="flex min-w-0 flex-col gap-4">
         <div className="order-1"><Suspense key={`k${k}`} fallback={<KpiSkeleton />}><KpiSection {...ctx} /></Suspense></div>
         {ctx.canWriteInventory && <div className="order-1"><Suspense fallback={<KpiSkeleton />}><FulfillmentKpiSection {...ctx} /></Suspense></div>}
+        {ctx.canFinance && <div className="order-1"><Suspense key={`fin${k}`} fallback={<KpiSkeleton />}><FinanceKpiSection {...ctx} /></Suspense></div>}
         <div className="order-5 lg:order-2"><Suspense key={`c${k}`} fallback={<CardSkeleton chart />}><SalesOverviewSection {...ctx} rangeText={text} /></Suspense></div>
         <div className="order-6 grid gap-4 lg:order-3 lg:grid-cols-2">
           <Suspense key={`b${k}`} fallback={<CardSkeleton rows={8} />}><RevenueBreakdownSection {...ctx} /></Suspense>

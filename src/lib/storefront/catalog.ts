@@ -220,15 +220,15 @@ export async function getCollections(db: DbOrTx): Promise<CollectionSummary[]> {
   return rows;
 }
 
-export type ResolvedCollection = { title: string; description: string; filters: Pick<CatalogFilters, "categorySlug" | "collectionSlug" | "tag" | "special"> };
+export type ResolvedCollection = { title: string; description: string; filters: Pick<CatalogFilters, "categorySlug" | "collectionSlug" | "tag" | "special">; collectionId?: string };
 
 /** A `/collections/[slug]` route can mean a category, an editorial collection, a curated tag, or a special
  *  view — resolved in that order, so the same shareable URL always means the same thing. */
 export async function resolveCollection(db: DbOrTx, slug: string): Promise<ResolvedCollection | null> {
   const [byCategory] = await db.select({ name: categories.name }).from(categories).where(eq(categories.slug, slug));
   if (byCategory) return { title: byCategory.name, description: `${byCategory.name}, designed to be worn every day.`, filters: { categorySlug: slug } };
-  const [byCollection] = await db.select({ name: collections.name, description: collections.description }).from(collections).where(eq(collections.slug, slug));
-  if (byCollection) return { title: byCollection.name, description: byCollection.description, filters: { collectionSlug: slug } };
+  const [byCollection] = await db.select({ id: collections.id, name: collections.name, description: collections.description }).from(collections).where(eq(collections.slug, slug));
+  if (byCollection) return { title: byCollection.name, description: byCollection.description, filters: { collectionSlug: slug }, collectionId: byCollection.id };
   const special: Record<string, { title: string; description: string; filters: ResolvedCollection["filters"] }> = {
     "best-sellers": { title: "Best Sellers", description: "The pieces our customers reach for again and again.", filters: { special: "best-sellers" } },
     "new-arrivals": { title: "New Arrivals", description: "The latest additions to the studio.", filters: { special: "new-arrivals" } },

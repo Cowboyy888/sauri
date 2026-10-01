@@ -91,13 +91,13 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
 }
 
 /* ---------------- edit: general + SEO (§26) ---------------- */
-type P = { id: string; name: string; slug: string; shortDescription: string; description: string; categoryId: string; collectionId: string | null; status: string; featured: boolean; bestSeller: boolean; newArrival: boolean; seoTitle: string | null; seoDescription: string | null; tags: string[] };
+type P = { id: string; name: string; slug: string; shortDescription: string; description: string; categoryId: string; collectionId: string | null; status: string; featured: boolean; bestSeller: boolean; newArrival: boolean; seoTitle: string | null; seoDescription: string | null; canonicalUrl: string | null; brand: string | null; careInstructions: string | null; tags: string[] };
 export function ProductGeneralForm({ p, categories, collections, readOnly }: { p: P; categories: Opt[]; collections: Opt[]; readOnly: boolean }) {
   const [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
   return (
     <form className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px]" action={(fd) => start(async () => {
       setErr(null);
-      const r = await updateProductAction({ id: p.id, name: s(fd, "name"), slug: s(fd, "slug"), shortDescription: s(fd, "shortDescription"), description: s(fd, "description"), categoryId: s(fd, "categoryId"), collectionId: s(fd, "collectionId"), status: s(fd, "status") as "active", featured: fd.get("featured") === "on", bestSeller: fd.get("bestSeller") === "on", newArrival: fd.get("newArrival") === "on" });
+      const r = await updateProductAction({ id: p.id, name: s(fd, "name"), slug: s(fd, "slug"), shortDescription: s(fd, "shortDescription"), description: s(fd, "description"), categoryId: s(fd, "categoryId"), collectionId: s(fd, "collectionId"), status: s(fd, "status") as "active", featured: fd.get("featured") === "on", bestSeller: fd.get("bestSeller") === "on", newArrival: fd.get("newArrival") === "on", brand: s(fd, "brand"), careInstructions: s(fd, "careInstructions") });
       if (r.ok) toast(r.message ?? "Saved"); else setErr(r.error);
     })}>
       <fieldset disabled={readOnly} className="grid grid-cols-1 gap-3.5 rounded-lg border border-line bg-surface p-4">
@@ -108,7 +108,9 @@ export function ProductGeneralForm({ p, categories, collections, readOnly }: { p
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Category"><Select name="categoryId" defaultValue={p.categoryId}>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
           <Field label="Collection"><Select name="collectionId" defaultValue={p.collectionId ?? ""}><option value="">None</option>{collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          <Field label="Brand"><Input name="brand" defaultValue={p.brand ?? ""} maxLength={80} /></Field>
         </div>
+        <Field label="Care instructions"><Textarea name="careInstructions" rows={2} defaultValue={p.careInstructions ?? ""} maxLength={1000} /></Field>
       </fieldset>
       <fieldset disabled={readOnly} className="grid content-start gap-3 rounded-lg border border-line bg-surface p-4">
         <p className="text-[13px] font-semibold">Visibility</p>
@@ -125,10 +127,11 @@ export function ProductSeoForm({ p, readOnly }: { p: P; readOnly: boolean }) {
   const [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
   const [title, setTitle] = useState(p.seoTitle ?? ""), [desc, setDesc] = useState(p.seoDescription ?? "");
   return (
-    <form className="grid max-w-2xl gap-4" action={(fd) => start(async () => { setErr(null); const r = await updateProductAction({ id: p.id, seoTitle: title, seoDescription: desc, tags: s(fd, "tags") }); if (r.ok) toast("SEO saved"); else setErr(r.error); })}>
+    <form className="grid max-w-2xl gap-4" action={(fd) => start(async () => { setErr(null); const r = await updateProductAction({ id: p.id, seoTitle: title, seoDescription: desc, canonicalUrl: s(fd, "canonicalUrl"), tags: s(fd, "tags") }); if (r.ok) toast("SEO saved"); else setErr(r.error); })}>
       <fieldset disabled={readOnly} className="grid grid-cols-1 gap-3.5 rounded-lg border border-line bg-surface p-4">
         <Field label={`SEO title (${title.length}/70)`}><Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={70} /></Field>
         <Field label={`SEO description (${desc.length}/160)`}><Textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} maxLength={160} /></Field>
+        <Field label="Canonical URL" hint="Leave empty to use this product's own page."><Input name="canonicalUrl" defaultValue={p.canonicalUrl ?? ""} placeholder="https://" /></Field>
         <Field label="Tags" hint="Comma-separated"><Input name="tags" defaultValue={p.tags.join(", ")} /></Field>
         <div className="rounded-md border border-line-soft p-3">
           <p className="text-xs text-muted">Search result preview</p>
@@ -175,14 +178,15 @@ export function AddVariantForm({ productId, skuPrefix }: { productId: string; sk
       <Button variant="secondary" onClick={() => setOpen(true)}>Add variant</Button>
       <DialogContent title="Add variant" description="New variants start with 0 stock.">
         <form className="grid grid-cols-1 gap-3" action={(fd) => start(async () => {
-          const r = await addVariantAction({ productId, sku: s(fd, "sku"), material: s(fd, "material") as "yg", size: s(fd, "size"), color: s(fd, "color"), gemstone: s(fd, "gemstone"), barcode: s(fd, "barcode"), sellingPrice: s(fd, "price"), costPrice: s(fd, "cost"), compareAtPrice: s(fd, "compare"), reorderLevel: s(fd, "reorder") || "5" } as never);
+          const r = await addVariantAction({ productId, sku: s(fd, "sku"), material: s(fd, "material") as "yg", size: s(fd, "size"), color: s(fd, "color"), gemstone: s(fd, "gemstone"), style: s(fd, "style"), barcode: s(fd, "barcode"), sellingPrice: s(fd, "price"), costPrice: s(fd, "cost"), compareAtPrice: s(fd, "compare"), reorderLevel: s(fd, "reorder") || "5" } as never);
           if (r.ok) { setOpen(false); toast(r.message ?? "Variant added"); } else setErr(r.error);
         })}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Material"><Select name="material">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
             <Field label="SKU"><Input name="sku" required defaultValue={`${skuPrefix}-`} style={{ textTransform: "uppercase" }} /></Field>
             <Field label="Size"><Input name="size" /></Field><Field label="Gemstone"><Input name="gemstone" /></Field>
-            <Field label="Color"><Input name="color" /></Field><Field label="Barcode"><Input name="barcode" /></Field>
+            <Field label="Color"><Input name="color" /></Field><Field label="Style"><Input name="style" /></Field>
+            <Field label="Barcode"><Input name="barcode" /></Field>
             <Field label="Selling price (USD)"><Input name="price" type="number" min={0.01} step="0.01" required /></Field>
             <Field label="Cost price (USD)"><Input name="cost" type="number" min={0} step="0.01" required /></Field>
             <Field label="Compare-at (USD)"><Input name="compare" type="number" min={0} step="0.01" /></Field>

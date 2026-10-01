@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/admin/page-header";
 import { AccessDenied } from "@/components/admin/access-denied";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { AddStaffForm, StaffRow } from "@/components/admin/owner-forms";
+import { CompanyDetailsForm } from "@/components/admin/purchasing-forms";
+import { getStoreSettings } from "@/lib/admin/store-settings";
 
 export const metadata = { title: "Settings" };
 const ROLES = ["OWNER", "ADMIN", "SALES", "INVENTORY", "VIEWER"] as const;
@@ -17,6 +19,7 @@ export default async function SettingsPage() {
   const g = await guard("settings:read");
   if (!g.ok) return <AccessDenied role={g.staff.role} permission={g.permission} />;
   const staff = g.can("staff:read") ? await listStaff(getDb()) : [];
+  const company = await getStoreSettings(getDb());
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader title="Settings" actions={g.can("audit:read") && <Link href="/admin/audit-log" className="text-[13px] font-medium text-accent hover:underline">Audit log</Link>} />
@@ -40,6 +43,12 @@ export default async function SettingsPage() {
           <Link href="/admin/settings/returns" className="rounded-md border border-line bg-surface px-3 py-2 text-[13px] font-medium text-accent hover:bg-canvas">Returns policy →</Link>
         </CardBody>
       </Card>
+      {g.can("settings:write") && (
+        <Card>
+          <CardHeader title="Company details" description="Used as the letterhead on purchase-order PDFs — never hardcoded (Phase 8 brief §17)." />
+          <CardBody><CompanyDetailsForm companyName={company.companyName} companyAddress={company.companyAddress} companyEmail={company.companyEmail} companyPhone={company.companyPhone} /></CardBody>
+        </Card>
+      )}
       <Card>
         <CardHeader title="Store rules" description="Set in code (src/lib/config.ts) for now." />
         <CardBody className="grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2">

@@ -56,3 +56,16 @@ export function reviewApprovedEmail(o: { email: string; productName: string }): 
 export function loyaltyRewardIssuedEmail(o: { email: string; rewardName: string; code: string }): EmailMessage {
   return { to: o.email, subject: `Reward redeemed — ${o.rewardName}`, text: `You redeemed ${o.rewardName}. Your code: ${o.code}. Apply it at checkout.` };
 }
+
+/* ------------------------------------------------------------------- Phase 7 */
+export function abandonedCartRecoveryEmail(o: { email: string; name: string; itemCount: number }): EmailMessage {
+  return { to: o.email, subject: "You left something in your bag", text: `Hi ${o.name}, you still have ${o.itemCount} ${o.itemCount === 1 ? "item" : "items"} in your bag. Come back and finish checking out.` };
+}
+
+/* ------------------------------------------------------------------- Phase 8 */
+export function purchaseOrderEmail(o: { email: string; poNumber: string; supplierName: string; totalText: string; expectedDelivery?: string | null }): EmailMessage {
+  return {
+    to: o.email, subject: `Purchase order ${o.poNumber}`,
+    text: `Dear ${o.supplierName},\n\nPlease find attached purchase order ${o.poNumber}, total ${o.totalText}.${o.expectedDelivery ? ` Expected delivery: ${o.expectedDelivery}.` : ""}\n\nThank you.`,
+  };
+}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getDb } from "@/lib/db/client";
 import { getCategories, searchProducts } from "@/lib/storefront/catalog";
 import { ProductCard } from "@/components/storefront/shop/product-card";
+import { TrackSearch } from "@/components/storefront/search/track-search";
 import Link from "next/link";
 
 export const metadata: Metadata = { title: "Search", robots: { index: false } };
@@ -14,6 +15,7 @@ export default async function SearchPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+      {q.trim().length >= 2 && <TrackSearch query={q} resultsCount={result.products.length} />}
       <h1 className="font-display text-3xl">{q ? <>Results for &ldquo;{q}&rdquo;</> : "Search"}</h1>
 
       {q.trim().length < 2 ? (

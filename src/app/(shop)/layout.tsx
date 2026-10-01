@@ -6,6 +6,7 @@ import { WishlistProvider } from "@/components/storefront/wishlist/wishlist-prov
 import { Header } from "@/components/storefront/layout/header";
 import { Footer } from "@/components/storefront/layout/footer";
 import { AttributionCapture } from "@/components/storefront/attribution-capture";
+import { AnalyticsCapture } from "@/components/storefront/analytics-capture";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const categories = await getCategories(getDb());
@@ -13,6 +14,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <CartProvider>
       <WishlistProvider>
         <AttributionCapture />
+        <AnalyticsCapture />
         <Header categories={categories} />
         <main>{children}</main>
         <Footer />

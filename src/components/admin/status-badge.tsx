@@ -33,6 +33,17 @@ const MAP: Record<string, [string, Tone]> = {
   published: ["Published", "pos"], hidden: ["Hidden", "neutral"], paused: ["Paused", "neutral"], scheduled: ["Scheduled", "info"], expired: ["Expired", "neutral"],
   // movements
   SALE: ["Sale", "info"], RESTOCK: ["Restock", "pos"], PURCHASE: ["Purchase", "pos"], RETURN: ["Return", "accent"], ADJUSTMENT: ["Adjustment", "warn"], DAMAGED: ["Damaged", "neg"], LOST: ["Lost", "neg"], TRANSFER: ["Transfer", "neutral"], MANUAL: ["Manual", "warn"],
+  // marketing campaigns / email campaigns (Phase 7)
+  DRAFT: ["Draft", "neutral"], ACTIVE: ["Active", "pos"], PAUSED: ["Paused", "neutral"], COMPLETED: ["Completed", "pos"], ARCHIVED: ["Archived", "neutral"],
+  SCHEDULED: ["Scheduled", "info"], SENDING: ["Sending", "info"], SENT: ["Sent", "pos"], CANCELLED: ["Cancelled", "neutral"],
+  // suppliers / purchase orders / stocktake (Phase 8)
+  INACTIVE: ["Inactive", "neutral"], BLOCKED: ["Blocked", "neg"],
+  PENDING_APPROVAL: ["Pending approval", "warn"], APPROVED: ["Approved", "pos"], ORDERED: ["Ordered", "info"],
+  PARTIALLY_RECEIVED: ["Partially received", "accent"], RECEIVED: ["Received", "pos"],
+  UNPAID: ["Unpaid", "warn"], PARTIALLY_PAID: ["Partially paid", "accent"], PAID: ["Paid", "pos"], OVERDUE: ["Overdue", "neg"],
+  in_progress: ["In progress", "info"], pending_approval: ["Pending approval", "warn"],
+  // expenses / reconciliation (Phase 9)
+  REJECTED: ["Rejected", "neg"], MATCHED: ["Matched", "pos"], UNMATCHED: ["Unmatched", "warn"], PARTIAL: ["Partial", "warn"], DISCREPANCY: ["Discrepancy", "neg"], IGNORED: ["Ignored", "neutral"],
 };
 
 /** kind="order": an order whose status is "paid" is waiting to be fulfilled, so say that (payment has its own column). */

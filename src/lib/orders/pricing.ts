@@ -6,13 +6,19 @@ import { STORE } from "../config";
 import { pct } from "../money";
 import { calculateTax } from "./tax";
 
-export type PricedLine = { unitPriceCents: number; unitCostCents: number; quantity: number; productId: string; categoryId: string };
+export type PricedLine = { unitPriceCents: number; unitCostCents: number; quantity: number; productId: string; categoryId: string; collectionId: string | null };
 export type AppliedDiscount = {
   type: "percent" | "fixed" | "free_shipping";
   value: number;
   categoryId: string | null;
   productId: string | null;
   maxDiscountCents: number | null;
+  /** Phase 7 (brief §14): richer scope alongside the legacy single categoryId/productId above. Empty/absent
+   *  array = no restriction of that kind. */
+  eligibleProductIds?: string[];
+  excludedProductIds?: string[];
+  eligibleCollectionIds?: string[];
+  excludedCollectionIds?: string[];
 };
 export type ChannelRules = { feePercentBp: number; feeFixedCents: number; shipsOrders: boolean; chargesShipping: boolean };
 /** A resolved row from `shipping_methods`. When passed to computeTotals, it replaces the legacy
@@ -35,7 +41,16 @@ export type Totals = {
   lineAmounts: LineAmounts[];
 };
 
-const eligible = (l: PricedLine, d: AppliedDiscount) => (!d.productId || l.productId === d.productId) && (!d.categoryId || l.categoryId === d.categoryId);
+const eligible = (l: PricedLine, d: AppliedDiscount) => {
+  const productAllow = d.productId ? [d.productId] : (d.eligibleProductIds ?? []);
+  const collectionAllow = d.eligibleCollectionIds ?? [];
+  const isEligibleProduct = productAllow.length === 0 || productAllow.includes(l.productId);
+  const isEligibleCategory = !d.categoryId || l.categoryId === d.categoryId;
+  const isEligibleCollection = collectionAllow.length === 0 || (l.collectionId != null && collectionAllow.includes(l.collectionId));
+  const isExcludedProduct = (d.excludedProductIds ?? []).includes(l.productId);
+  const isExcludedCollection = l.collectionId != null && (d.excludedCollectionIds ?? []).includes(l.collectionId);
+  return isEligibleProduct && isEligibleCategory && isEligibleCollection && !isExcludedProduct && !isExcludedCollection;
+};
 
 export function eligibleSubtotal(lines: PricedLine[], d: AppliedDiscount): number {
   return lines.filter((l) => eligible(l, d)).reduce((a, l) => a + l.unitPriceCents * l.quantity, 0);

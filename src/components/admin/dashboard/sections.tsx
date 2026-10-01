@@ -25,7 +25,7 @@ import { cn } from "../../ui/cn";
 import { sql } from "drizzle-orm";
 import { productImage, rows as query } from "@/lib/admin/sql";
 
-type Ctx = { db: DbOrTx; r: Range & { previous: Range }; parsed: ParsedRange; fail?: string; canWriteInventory: boolean; canOrders: boolean; canProducts: boolean };
+type Ctx = { db: DbOrTx; r: Range & { previous: Range }; parsed: ParsedRange; fail?: string; canWriteInventory: boolean; canOrders: boolean; canProducts: boolean; canFinance?: boolean };
 const Err = ({ msg, className }: { msg: string; className?: string }) => <Card className={className}><ErrorState message={msg} /></Card>;
 
 /* §7 KPI cards */
@@ -46,6 +46,31 @@ export async function KpiSection({ db, r, parsed, fail }: Ctx) {
       <KPICard label="Units sold" value={int(m.units)} change={pctChange(m.units, p.units)} comparison={cmp} />
       <KPICard label="New customers" value={int(m.newCustomers)} change={pctChange(m.newCustomers, p.newCustomers)} comparison={cmp} hint="First paid order in this period" />
       <KPICard label="Inventory value" value={moneyKpi(inv)} change={null} comparison="" note="Current position, not date-bound" hint="Available stock × cost price" href="/admin/inventory" />
+    </section>
+  );
+}
+
+/* Phase 9 §21: the figures the sales KPI section above doesn't already show — operating basis, cash, and
+ *  payables. Revenue/gross profit/margin/inventory value are already visible in KpiSection just above, so
+ *  they aren't repeated here (brief: "do not make the dashboard visually overloaded"). */
+export async function FinanceKpiSection({ db, r, fail, canFinance }: Ctx) {
+  if (!canFinance) return null;
+  const res = await safe("finance-kpi", async () => {
+    const [{ getFinancialSummary }, { getRefundAnalytics }] = await Promise.all([import("@/lib/finance/summary"), import("@/lib/finance/refunds")]);
+    const [s, refunds] = await Promise.all([getFinancialSummary(db, r), getRefundAnalytics(db, r)]);
+    return { s, refundRatePct: refunds.refundRatePct };
+  }, fail);
+  if (!res.ok) return <Err msg="Unable to load finance data." />;
+  const { s, refundRatePct } = res.data;
+  return (
+    <section aria-label="Finance" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <KPICard label="Operating expenses" value={moneyKpi(s.operatingExpensesCents)} change={null} comparison="" href="/admin/finance/expenses" />
+      <KPICard label="Operating profit" value={moneyKpi(s.operatingProfitCents)} change={null} comparison="" href="/admin/finance" />
+      <KPICard label="Cash in / out" value={`${moneyKpi(s.cashInCents)} / ${moneyKpi(s.cashOutCents)}`} change={null} comparison="" href="/admin/finance/cash-flow" />
+      <KPICard label="Net cash flow" value={moneyKpi(s.netCashFlowCents)} change={null} comparison="" tone={s.netCashFlowCents < 0 ? "neg" : undefined} href="/admin/finance/cash-flow" />
+      <KPICard label="Outstanding supplier payments" value={moneyKpi(s.outstandingSupplierPaymentsCents)} change={null} comparison="" note="Current position" href="/admin/finance/supplier-payments" />
+      <KPICard label="Overdue supplier payments" value={moneyKpi(s.overdueSupplierPaymentsCents)} change={null} comparison="" note="Current position" tone={s.overdueSupplierPaymentsCents > 0 ? "warn" : undefined} href="/admin/finance/supplier-payments" />
+      <KPICard label="Refund rate" value={refundRatePct == null ? "N/A" : pct(refundRatePct)} change={null} comparison="" href="/admin/finance/refunds" />
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { type Actor, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
 import { eligibleSubtotal, type PricedLine } from "../orders/pricing";
 import { formatMoney } from "../money";
+import { getCustomerSegments } from "../crm/segments";
 
 export type DiscountRow = typeof discounts.$inferSelect;
 
@@ -20,12 +21,24 @@ export async function validateDiscount(tx: DbOrTx, code: string, lines: PricedLi
   if (d.usageLimit != null && d.usedCount >= d.usageLimit) throw new ValidationError("This code has reached its usage limit.");
   const subtotal = lines.reduce((a, l) => a + l.unitPriceCents * l.quantity, 0);
   if (subtotal < d.minSubtotalCents) throw new ValidationError(`This code needs a minimum order of ${formatMoney(d.minSubtotalCents)}.`);
-  if ((d.categoryId || d.productId) && eligibleSubtotal(lines, d) === 0) throw new ValidationError("This code does not apply to the items in your bag.");
+  const hasScope = d.categoryId || d.productId || d.eligibleProductIds.length || d.excludedProductIds.length || d.eligibleCollectionIds.length || d.excludedCollectionIds.length;
+  if (hasScope && eligibleSubtotal(lines, d) === 0) throw new ValidationError("This code does not apply to the items in your bag.");
   if (d.perCustomerLimit != null && customerId) {
     const [u] = await tx.select({ n: count() }).from(discountUsages)
       .innerJoin(orders, eq(orders.id, discountUsages.orderId))
       .where(and(eq(discountUsages.discountId, d.id), eq(discountUsages.customerId, customerId), sql`${orders.status} <> 'cancelled'`));
     if ((u?.n ?? 0) >= d.perCustomerLimit) throw new ValidationError("You have already used this code.");
+  }
+  // Phase 7 (brief §13-14, §18): customer-segment eligibility and first-order-only, both checked
+  // server-side against real order/segment data — never trusted from the browser.
+  if (d.eligibleSegments.length && customerId) {
+    const segments = await getCustomerSegments(tx, customerId);
+    if (!d.eligibleSegments.some((s) => segments.includes(s as (typeof segments)[number]))) throw new ValidationError(`${clean} is not available for your account.`);
+  }
+  if (d.firstOrderOnly) {
+    if (!customerId) throw new ValidationError("This code is for first-time customers only.");
+    const [prior] = await tx.select({ n: count() }).from(orders).where(and(eq(orders.customerId, customerId), sql`${orders.paidAt} is not null`));
+    if ((prior?.n ?? 0) > 0) throw new ValidationError("This code is for first-time customers only.");
   }
   return d;
 }

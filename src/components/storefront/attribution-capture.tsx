@@ -15,6 +15,7 @@ export function AttributionCapture() {
       const utmSource = params.get("utm_source") ?? undefined;
       const utmMedium = params.get("utm_medium") ?? undefined;
       const utmCampaign = params.get("utm_campaign") ?? undefined;
+      const utmTerm = params.get("utm_term") ?? undefined;
       const utmContent = params.get("utm_content") ?? undefined;
       const ref = params.get("ref") ?? undefined;
       const referrer = document.referrer || undefined;
@@ -23,7 +24,7 @@ export function AttributionCapture() {
       const hasSignal = !!(utmSource || ref || referrerIsExternal);
       const already = document.cookie.split("; ").some((c) => c.startsWith(`${COOKIE}=`));
       if (!hasSignal && already) return;
-      const details = { utmSource: utmSource ?? ref, utmMedium, utmCampaign, utmContent, referrer };
+      const details = { utmSource: utmSource ?? ref, utmMedium, utmCampaign, utmTerm, utmContent, referrer };
       document.cookie = `${COOKIE}=${encodeURIComponent(JSON.stringify(details))}; path=/; max-age=${MAX_AGE_DAYS * 86400}; samesite=lax`;
     } catch {
       // Attribution is best-effort; never let a cookie failure affect the page.

@@ -49,14 +49,49 @@ export const returnDisposition = pgEnum("return_disposition", ["restock", "repai
 /* ------------------------------------------------------------ Phase 6 enums */
 /** How a customer found the brand — captured once (first touch) and again on every order (last touch);
  *  see docs/CRM.md. Distinct from `sales_channels`, which describes how an *order* was transacted. */
-export const acquisitionSource = pgEnum("acquisition_source", ["WEBSITE", "INSTAGRAM", "FACEBOOK", "TIKTOK", "GOOGLE", "REFERRAL", "PHYSICAL_STORE", "WHOLESALE", "DIRECT", "OTHER"]);
+export const acquisitionSource = pgEnum("acquisition_source", ["WEBSITE", "INSTAGRAM", "FACEBOOK", "TIKTOK", "GOOGLE", "REFERRAL", "PHYSICAL_STORE", "WHOLESALE", "DIRECT", "EMAIL", "OTHER"]);
 export const communicationType = pgEnum("communication_type", ["email", "sms", "call", "whatsapp", "telegram", "note"]);
 export const consentType = pgEnum("consent_type", ["email_marketing", "sms_marketing"]);
 export const abandonedCartStatus = pgEnum("abandoned_cart_status", ["active", "abandoned", "recovered", "expired"]);
 export const loyaltyTransactionType = pgEnum("loyalty_transaction_type", ["EARN", "REDEEM", "REFUND_REVERSAL", "ADJUSTMENT", "EXPIRATION", "BONUS"]);
 export const loyaltyRedemptionStatus = pgEnum("loyalty_redemption_status", ["issued", "used", "expired", "cancelled"]);
 
+/* ------------------------------------------------------------ Phase 7 enums */
+export const campaignStatus = pgEnum("campaign_status", ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]);
+/** FIRST_TOUCH and LAST_TOUCH are computed today (see docs/ATTRIBUTION.md). LINEAR and POSITION_BASED are
+ *  carried in the enum so the schema won't need to change again, but nothing computes them yet — they need
+ *  a customer's whole touch history (marketing_events), not just first/last. */
+export const attributionModel = pgEnum("attribution_model", ["FIRST_TOUCH", "LAST_TOUCH", "LINEAR", "POSITION_BASED"]);
+export const marketingEventType = pgEnum("marketing_event_type", [
+  "page_view", "product_viewed", "collection_viewed", "search", "wishlist_added", "cart_added", "cart_removed",
+  "checkout_started", "shipping_added", "payment_started", "purchase_completed", "coupon_applied", "coupon_failed",
+  "promotion_viewed", "email_clicked",
+]);
+export const emailCampaignStatus = pgEnum("email_campaign_status", ["DRAFT", "SCHEDULED", "SENDING", "SENT", "CANCELLED"]);
+
+/* ------------------------------------------------------------ Phase 8 enums */
+export const supplierStatus = pgEnum("supplier_status", ["ACTIVE", "INACTIVE", "BLOCKED"]);
+export const purchaseOrderStatus = pgEnum("purchase_order_status", ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"]);
+/** "OVERDUE" is never stored — it's derived at read time (due_date passed and not fully paid) so it can
+ *  never drift out of sync with the date; see docs/PURCHASING.md. */
+export const purchasePaymentStatus = pgEnum("purchase_payment_status", ["UNPAID", "PARTIALLY_PAID", "PAID"]);
+export const purchaseDocumentType = pgEnum("purchase_document_type", ["quotation", "invoice", "packing_list", "receiving_document", "other"]);
+export const stocktakeStatus = pgEnum("stocktake_status", ["in_progress", "pending_approval", "completed", "cancelled"]);
+
+/** Phase 9 (brief §7-8). DRAFT never counts anywhere. PENDING_APPROVAL never counts anywhere (not yet
+ *  posted). APPROVED and PAID both count as "posted" for the accrual P&L (brief §4: "SUM approved/posted
+ *  operating expenses") — only PAID counts as an actual cash outflow. REJECTED and CANCELLED never count;
+ *  neither is ever hard-deleted once it has affected reporting (brief §8), matching the void/reversal
+ *  posture of a refund rather than a row deletion. */
+export const expenseStatus = pgEnum("expense_status", ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "PAID", "CANCELLED"]);
+/** Phase 9 (brief §15). A payment with no electronic provider to check against (cash, manual, bank
+ *  transfer with no statement yet) is IGNORED, not UNMATCHED — UNMATCHED means a provider *was* checked and
+ *  no matching record was found there. */
+export const reconciliationStatus = pgEnum("reconciliation_status", ["MATCHED", "UNMATCHED", "PARTIAL", "DISCREPANCY", "IGNORED"]);
+
 export const orderNumberSeq = pgSequence("order_number_seq", { startWith: 10001 });
+export const poNumberSeq = pgSequence("po_number_seq", { startWith: 1 });
+export const expenseNumberSeq = pgSequence("expense_number_seq", { startWith: 1 });
 
 /* ------------------------------------------------------------ staff & auth */
 export const roles = pgTable("roles", {
@@ -153,6 +188,10 @@ export const products = pgTable("products", {
   badge: text("badge"),
   seoTitle: text("seo_title"),
   seoDescription: text("seo_description"),
+  // Phase 8 (brief §3): canonicalUrl lets a duplicate/variant listing point SEO credit at the primary one.
+  canonicalUrl: text("canonical_url"),
+  brand: text("brand"),
+  careInstructions: text("care_instructions"),
   tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   details: jsonb("details").$type<string[]>().notNull().default([]),
   createdAt: createdAt(),
@@ -181,6 +220,7 @@ export const productVariants = pgTable("product_variants", {
   color: text("color"),
   size: text("size"),
   gemstone: text("gemstone"),
+  style: text("style"),
   costPriceCents: integer("cost_price_cents").notNull(),
   sellingPriceCents: integer("selling_price_cents").notNull(),
   compareAtPriceCents: integer("compare_at_price_cents"),
@@ -203,12 +243,16 @@ export const inventory = pgTable("inventory", {
   stockQuantity: integer("stock_quantity").notNull().default(0),
   reservedQuantity: integer("reserved_quantity").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(5),
+  /** Phase 8 (brief §31): the level a reorder should bring available stock back up to. Null = no target set
+   *  yet; the reorder-suggestion formula falls back to reorderLevel × 5 in that case — see docs/REORDERING.md. */
+  targetStockLevel: integer("target_stock_level"),
   updatedAt: updatedAt(),
 }, (t) => [
   // The database refuses impossible stock even if application code has a bug.
   check("inventory_stock_non_negative", sql`${t.stockQuantity} >= 0`),
   check("inventory_reserved_valid", sql`${t.reservedQuantity} >= 0 AND ${t.reservedQuantity} <= ${t.stockQuantity}`),
   check("inventory_reorder_non_negative", sql`${t.reorderLevel} >= 0`),
+  check("inventory_target_stock_non_negative", sql`${t.targetStockLevel} IS NULL OR ${t.targetStockLevel} >= 0`),
   // "Inventory status" index: finds low/out-of-stock rows without scanning healthy ones.
   index("inventory_needs_attention_idx").on(t.variantId).where(sql`${t.stockQuantity} - ${t.reservedQuantity} <= ${t.reorderLevel}`),
 ]);
@@ -226,13 +270,30 @@ export const inventoryLocations = pgTable("inventory_locations", {
   updatedAt: updatedAt(),
 });
 
+/** Phase 1 had only name/email/phone (populated lazily by restock()'s free-text supplier field). Phase 8
+ *  adds the rest (brief §11) — the same rows, one supplier system, not two. */
 export const suppliers = pgTable("suppliers", {
   id: id(),
   name: text("name").notNull().unique(),
+  company: text("company"),
+  contactPerson: text("contact_person"),
   email: text("email"),
   phone: text("phone"),
+  addressLine1: text("address_line1"),
+  addressLine2: text("address_line2"),
+  city: text("city"),
+  postalCode: text("postal_code"),
+  country: text("country"),
+  website: text("website"),
+  paymentTerms: text("payment_terms"),
+  currency: text("currency").notNull().default("USD"),
+  leadTimeDays: integer("lead_time_days"),
+  minimumOrderCents: integer("minimum_order_cents"),
+  notes: text("notes"),
+  status: supplierStatus("status").notNull().default("ACTIVE"),
   createdAt: createdAt(),
-});
+  updatedAt: updatedAt(),
+}, (t) => [check("supplier_lead_time_non_negative", sql`${t.leadTimeDays} IS NULL OR ${t.leadTimeDays} >= 0`), check("supplier_min_order_non_negative", sql`${t.minimumOrderCents} IS NULL OR ${t.minimumOrderCents} >= 0`)]);
 
 export const inventoryMovements = pgTable("inventory_movements", {
   id: serial("id").primaryKey(),
@@ -521,6 +582,24 @@ export const discounts = pgTable("discounts", {
   // use it (validateDiscount checks this), so a leaked code is useless to anyone else. Null for every
   // ordinary admin-created discount.
   restrictedToCustomerId: uuid("restricted_to_customer_id").references(() => customers.id),
+  /* ---------------------------------------------------------------- Phase 7 */
+  // Internal label (brief §6 "Campaign Name" reused here for a promotion's own name) — distinct from
+  // `code`, which is what the customer types. Null for pre-Phase-7 rows.
+  name: text("name"),
+  // Richer eligibility (brief §14) alongside the pre-existing single categoryId/productId (kept for
+  // backward compatibility with the Phase 2 /admin/discounts page). eligible() in orders/pricing.ts unions
+  // both mechanisms. Empty array = no restriction of that kind.
+  eligibleProductIds: uuid("eligible_product_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  excludedProductIds: uuid("excluded_product_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  eligibleCollectionIds: uuid("eligible_collection_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  excludedCollectionIds: uuid("excluded_collection_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  // Segment keys from lib/crm/segments.ts's SEGMENT_KEYS — reused, never redefined here (brief §13).
+  eligibleSegments: text("eligible_segments").array().notNull().default(sql`'{}'::text[]`),
+  // First-order promotion (brief §18) — validated server-side in validateDiscount against paid order history.
+  firstOrderOnly: boolean("first_order_only").notNull().default(false),
+  // Optional link to the campaign this coupon belongs to, so a campaign's "Discounts" cost line and a
+  // coupon's revenue figures can both be read from the same discount_usages ⋈ orders join (brief §8, §28).
+  campaignId: uuid("campaign_id").references((): AnyPgColumn => marketingCampaigns.id),
   createdAt: createdAt(),
 }, (t) => [
   uniqueIndex("discounts_code_uq").on(sql`upper(${t.code})`),
@@ -820,3 +899,428 @@ export const loyaltyRedemptions = pgTable("loyalty_redemptions", {
   createdAt: createdAt(),
   usedAt: timestamp("used_at", { withTimezone: true }),
 }, (t) => [index("loyalty_redemptions_customer_idx").on(t.customerId, t.createdAt)]);
+
+/* ---------------------------------------------------------- Marketing (Phase 7) */
+/** A campaign's `slug` IS the exact `utm_campaign` value used to match traffic and orders to it (brief §6
+ *  calls this both "Campaign ID" and "Campaign" — they are the same string here); `name` is the separate
+ *  human label. See docs/CAMPAIGNS.md. */
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: id(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(), // matched case-insensitively against utm_campaign
+  source: text("source").notNull(), // free text, matches utm_source (not the fixed acquisition_source enum — campaigns can target any platform)
+  medium: text("medium").notNull(), // matches utm_medium
+  budgetCents: integer("budget_cents"), // planned spend; null = not budgeted. Actual spend is sum(campaign_costs).
+  status: campaignStatus("status").notNull().default("DRAFT"),
+  description: text("description").notNull().default(""),
+  startDate: timestamp("start_date", { withTimezone: true }),
+  endDate: timestamp("end_date", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("marketing_campaigns_slug_uq").on(sql`lower(${t.slug})`),
+  index("marketing_campaigns_status_idx").on(t.status),
+  check("marketing_campaign_budget_non_negative", sql`${t.budgetCents} IS NULL OR ${t.budgetCents} >= 0`),
+  check("marketing_campaign_dates_valid", sql`${t.startDate} IS NULL OR ${t.endDate} IS NULL OR ${t.startDate} <= ${t.endDate}`),
+]);
+
+/** Manually-entered spend (brief §28), one or more dated rows per campaign rather than a single mutable
+ *  "actual spend" column — auditable, and matches the brief's own table list (§45). */
+export const campaignCosts = pgTable("campaign_costs", {
+  id: id(),
+  campaignId: uuid("campaign_id").notNull().references(() => marketingCampaigns.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  incurredAt: timestamp("incurred_at", { withTimezone: true }).notNull().defaultNow(),
+  note: text("note"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [
+  index("campaign_costs_campaign_idx").on(t.campaignId, t.incurredAt),
+  check("campaign_cost_positive", sql`${t.amountCents} > 0`),
+]);
+
+/**
+ * One immutable snapshot per order (brief §4-5, §8), written inside the same transaction as `placeOrder`.
+ * `customers.first_touch_*`/`last_touch_*` (Phase 6) keep changing as a customer keeps visiting — this row
+ * freezes exactly what they were at the moment THIS order was placed, so campaign revenue for an old order
+ * can never silently change later. campaignId is resolved once, at write time, from utm_campaign; storing
+ * it (rather than re-matching by string at every query) keeps every campaign-analytics query a plain join.
+ */
+export const marketingAttributions = pgTable("marketing_attributions", {
+  id: id(),
+  orderId: uuid("order_id").notNull().unique().references(() => orders.id, { onDelete: "cascade" }),
+  customerId: uuid("customer_id").notNull().references(() => customers.id),
+  firstTouchSource: acquisitionSource("first_touch_source"),
+  firstTouchDetails: jsonb("first_touch_details").$type<{ utmSource?: string; utmMedium?: string; utmCampaign?: string; utmTerm?: string; utmContent?: string; referrer?: string }>(),
+  firstTouchCampaignId: uuid("first_touch_campaign_id").references(() => marketingCampaigns.id),
+  lastTouchSource: acquisitionSource("last_touch_source"),
+  lastTouchDetails: jsonb("last_touch_details").$type<{ utmSource?: string; utmMedium?: string; utmCampaign?: string; utmTerm?: string; utmContent?: string; referrer?: string }>(),
+  lastTouchCampaignId: uuid("last_touch_campaign_id").references(() => marketingCampaigns.id),
+  createdAt: createdAt(),
+}, (t) => [
+  index("marketing_attributions_first_campaign_idx").on(t.firstTouchCampaignId),
+  index("marketing_attributions_last_campaign_idx").on(t.lastTouchCampaignId),
+  index("marketing_attributions_customer_idx").on(t.customerId),
+]);
+
+/**
+ * Centralized event log (brief §46-47) — one table for every tracked interaction, never a separate table
+ * per event type. `eventId` is a client-generated idempotency key (deduplicates a retried client request);
+ * `purchase_completed` additionally gets a partial unique index on `order_id` since that one is written
+ * server-side and must never double-count regardless of how it's triggered. Money is deliberately NOT
+ * stored here — revenue always comes from `orders`/`order_items` (joined through `marketing_attributions`
+ * for campaign grouping), so there is exactly one source of truth for financial figures (docs/ANALYTICS.md).
+ */
+export const marketingEvents = pgTable("marketing_events", {
+  id: id(),
+  eventId: text("event_id"), // client-supplied idempotency key; null for server-written events (see partial unique index below)
+  sessionId: text("session_id").notNull(),
+  customerId: uuid("customer_id").references(() => customers.id),
+  type: marketingEventType("type").notNull(),
+  path: text("path"),
+  referrer: text("referrer"),
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium"),
+  utmCampaign: text("utm_campaign"),
+  utmTerm: text("utm_term"),
+  utmContent: text("utm_content"),
+  campaignId: uuid("campaign_id").references(() => marketingCampaigns.id),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+  collectionId: uuid("collection_id").references(() => collections.id, { onDelete: "set null" }),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+  searchQuery: text("search_query"),
+  resultsCount: integer("results_count"),
+  device: text("device"), // "desktop" | "mobile" | "tablet" | null — never the raw user-agent (brief §48)
+  metadata: jsonb("metadata"),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex("marketing_events_event_id_uq").on(t.eventId).where(sql`${t.eventId} is not null`),
+  uniqueIndex("marketing_events_purchase_order_uq").on(t.orderId).where(sql`${t.type} = 'purchase_completed'`),
+  index("marketing_events_type_created_idx").on(t.type, t.createdAt),
+  index("marketing_events_session_idx").on(t.sessionId),
+  index("marketing_events_campaign_idx").on(t.campaignId, t.createdAt),
+  index("marketing_events_product_idx").on(t.productId, t.type),
+  index("marketing_events_collection_idx").on(t.collectionId, t.type),
+]);
+
+/** Campaign URL builder + email/other architecture (brief §22-25). Not a full enterprise email provider —
+ *  reuses lib/email/provider.ts's send() (currently a logging stub, same as every transactional email). */
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: id(),
+  name: text("name").notNull(),
+  audience: jsonb("audience").$type<{ type: "segment" | "loyalty_members" | "bought_category" | "has_wishlist_items"; segmentKey?: string; categoryId?: string }>().notNull(),
+  subject: text("subject").notNull(),
+  previewText: text("preview_text").notNull().default(""),
+  content: text("content").notNull(),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  status: emailCampaignStatus("status").notNull().default("DRAFT"),
+  campaignId: uuid("campaign_id").references(() => marketingCampaigns.id), // optional link for revenue/orders attribution
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const emailCampaignRecipients = pgTable("email_campaign_recipients", {
+  id: id(),
+  emailCampaignId: uuid("email_campaign_id").notNull().references(() => emailCampaigns.id, { onDelete: "cascade" }),
+  customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex("email_campaign_recipients_uq").on(t.emailCampaignId, t.customerId),
+  index("email_campaign_recipients_customer_idx").on(t.customerId),
+]);
+
+/* ---------------------------------------------------------- Purchasing (Phase 8) */
+/** Which suppliers can provide a given variant, and on what terms (brief §12). A variant can have several
+ *  suppliers; `preferred_supplier` marks the default without ever auto-selecting it for a PO — see
+ *  docs/SUPPLIERS.md. `last_purchase_price_cents`/`last_purchase_date` are updated when a PO against this
+ *  pairing is received; never overwritten retroactively (brief §26). */
+export const supplierProducts = pgTable("supplier_products", {
+  id: id(),
+  supplierId: uuid("supplier_id").notNull().references(() => suppliers.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").notNull().references(() => productVariants.id, { onDelete: "cascade" }),
+  supplierSku: text("supplier_sku"),
+  purchasePriceCents: integer("purchase_price_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  minimumOrderQuantity: integer("minimum_order_quantity"),
+  leadTimeDays: integer("lead_time_days"),
+  preferredSupplier: boolean("preferred_supplier").notNull().default(false),
+  lastPurchasePriceCents: integer("last_purchase_price_cents"),
+  lastPurchaseDate: timestamp("last_purchase_date", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("supplier_products_uq").on(t.supplierId, t.variantId),
+  index("supplier_products_variant_idx").on(t.variantId),
+  check("supplier_product_price_non_negative", sql`${t.purchasePriceCents} >= 0`),
+  check("supplier_product_moq_positive", sql`${t.minimumOrderQuantity} IS NULL OR ${t.minimumOrderQuantity} > 0`),
+]);
+
+/**
+ * One purchase order (brief §13-15). `po_number` reuses the exact pattern `orders.order_number` already
+ * uses — a sequence-backed default expression — with the year embedded per the brief's own example
+ * (PO-2026-000001). Money columns mirror `orders`' own convention (integer cents, a total-math CHECK).
+ */
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: id(),
+  poNumber: text("po_number").notNull().unique().default(sql`'PO-' || extract(year from now()) || '-' || lpad(nextval('po_number_seq')::text, 6, '0')`),
+  supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
+  status: purchaseOrderStatus("status").notNull().default("DRAFT"),
+  paymentStatus: purchasePaymentStatus("payment_status").notNull().default("UNPAID"),
+  orderDate: timestamp("order_date", { withTimezone: true }).notNull().defaultNow(),
+  expectedDeliveryDate: timestamp("expected_delivery_date", { withTimezone: true }),
+  currency: text("currency").notNull().default("USD"),
+  paymentTerms: text("payment_terms"),
+  notes: text("notes").notNull().default(""),
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  discountCents: integer("discount_cents").notNull().default(0),
+  shippingCents: integer("shipping_cents").notNull().default(0),
+  taxCents: integer("tax_cents").notNull().default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+  amountPaidCents: integer("amount_paid_cents").notNull().default(0),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  orderedAt: timestamp("ordered_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  index("purchase_orders_supplier_idx").on(t.supplierId),
+  index("purchase_orders_status_idx").on(t.status),
+  check("purchase_order_total_math", sql`${t.totalCents} = ${t.subtotalCents} - ${t.discountCents} + ${t.shippingCents} + ${t.taxCents}`),
+  check("purchase_order_amounts_non_negative", sql`${t.subtotalCents} >= 0 AND ${t.discountCents} >= 0 AND ${t.shippingCents} >= 0 AND ${t.taxCents} >= 0 AND ${t.amountPaidCents} >= 0`),
+]);
+
+/** One line of a PO. `received_quantity` is a cached running total (updated only by the receiving
+ *  transaction, same pattern as `discounts.used_count`) so "ordered / received / remaining" never needs to
+ *  sum every receipt on every page load. */
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: id(),
+  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  productId: uuid("product_id").notNull().references(() => products.id),
+  variantId: uuid("variant_id").notNull().references(() => productVariants.id),
+  supplierSku: text("supplier_sku"),
+  quantity: integer("quantity").notNull(),
+  unitCostCents: integer("unit_cost_cents").notNull(),
+  discountCents: integer("discount_cents").notNull().default(0),
+  lineTotalCents: integer("line_total_cents").notNull(),
+  receivedQuantity: integer("received_quantity").notNull().default(0),
+  createdAt: createdAt(),
+}, (t) => [
+  index("purchase_order_items_po_idx").on(t.purchaseOrderId),
+  index("purchase_order_items_variant_idx").on(t.variantId),
+  check("purchase_order_item_qty_positive", sql`${t.quantity} > 0`),
+  check("purchase_order_item_cost_non_negative", sql`${t.unitCostCents} >= 0`),
+  check("purchase_order_item_line_math", sql`${t.lineTotalCents} = ${t.quantity} * ${t.unitCostCents} - ${t.discountCents}`),
+  check("purchase_order_item_received_valid", sql`${t.receivedQuantity} >= 0 AND ${t.receivedQuantity} <= ${t.quantity}`),
+]);
+
+/** One goods-receiving event against a PO — a PO can have several (partial receiving, brief §23). */
+export const purchaseReceipts = pgTable("purchase_receipts", {
+  id: id(),
+  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  receivedByUserId: uuid("received_by_user_id").references(() => users.id),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  notes: text("notes").notNull().default(""),
+  createdAt: createdAt(),
+}, (t) => [index("purchase_receipts_po_idx").on(t.purchaseOrderId, t.receivedAt)]);
+
+/** Per-line quality-control breakdown for one receipt (brief §24-25). Only `accepted_quantity` ever becomes
+ *  sellable stock — damaged/rejected units never touch `inventory.stock_quantity` at all, since they never
+ *  entered it (see docs/PURCHASING.md's "Quality control" section for why this isn't a DAMAGED movement). */
+export const purchaseReceiptItems = pgTable("purchase_receipt_items", {
+  id: id(),
+  purchaseReceiptId: uuid("purchase_receipt_id").notNull().references(() => purchaseReceipts.id, { onDelete: "cascade" }),
+  purchaseOrderItemId: uuid("purchase_order_item_id").notNull().references(() => purchaseOrderItems.id),
+  acceptedQuantity: integer("accepted_quantity").notNull().default(0),
+  damagedQuantity: integer("damaged_quantity").notNull().default(0),
+  rejectedQuantity: integer("rejected_quantity").notNull().default(0),
+  unitCostCents: integer("unit_cost_cents").notNull(), // snapshot — never overwritten if the supplier's price later changes
+  notes: text("notes"),
+  createdAt: createdAt(),
+}, (t) => [
+  index("purchase_receipt_items_receipt_idx").on(t.purchaseReceiptId),
+  index("purchase_receipt_items_po_item_idx").on(t.purchaseOrderItemId),
+  check("purchase_receipt_item_quantities_non_negative", sql`${t.acceptedQuantity} >= 0 AND ${t.damagedQuantity} >= 0 AND ${t.rejectedQuantity} >= 0`),
+  check("purchase_receipt_item_has_quantity", sql`${t.acceptedQuantity} + ${t.damagedQuantity} + ${t.rejectedQuantity} > 0`),
+]);
+
+/** PO attachments (brief §42) — a URL text field, same convention as product images and Phase 5's return
+ *  photos: this project has no binary file-upload provider configured, so attachments are added by URL. */
+export const purchaseDocuments = pgTable("purchase_documents", {
+  id: id(),
+  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  url: text("url").notNull(),
+  type: purchaseDocumentType("type").notNull().default("other"),
+  uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [index("purchase_documents_po_idx").on(t.purchaseOrderId)]);
+
+/** A log of PO-email attempts (brief §18) — never sent automatically; always an explicit staff action. */
+export const purchaseOrderSends = pgTable("purchase_order_sends", {
+  id: id(),
+  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  sentByUserId: uuid("sent_by_user_id").references(() => users.id),
+  recipientEmail: text("recipient_email").notNull(),
+  succeeded: boolean("succeeded").notNull().default(true),
+  errorMessage: text("error_message"),
+  createdAt: createdAt(),
+}, (t) => [index("purchase_order_sends_po_idx").on(t.purchaseOrderId, t.createdAt)]);
+
+/** A minimal payment log (brief §41) — deliberately not a general ledger. `purchase_orders.payment_status`
+ *  and `amount_paid_cents` are derived from these rows by `recordPurchasePayment()`, never set directly. */
+export const purchasePayments = pgTable("purchase_payments", {
+  id: id(),
+  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+  note: text("note"),
+  // Phase 9 (brief §9): additive — recordPurchasePayment() stays the only write path (docs/FINANCE_AUDIT.md §1).
+  paymentMethod: text("payment_method"),
+  referenceNumber: text("reference_number"),
+  attachmentUrl: text("attachment_url"),
+  recordedByUserId: uuid("recorded_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [index("purchase_payments_po_idx").on(t.purchaseOrderId, t.paidAt), check("purchase_payment_positive", sql`${t.amountCents} > 0`)]);
+
+/** Selling-price history (brief §38) — genuinely new; Phase 2 only ever overwrote the current price in
+ *  place. Written from inside the existing `updateVariant()` whenever price/compare-at actually changes —
+ *  one write path, not two. Never updated or deleted once written. */
+export const productPriceHistory = pgTable("product_price_history", {
+  id: id(),
+  variantId: uuid("variant_id").notNull().references(() => productVariants.id, { onDelete: "cascade" }),
+  sellingPriceCents: integer("selling_price_cents").notNull(),
+  compareAtPriceCents: integer("compare_at_price_cents"),
+  effectiveAt: timestamp("effective_at", { withTimezone: true }).notNull().defaultNow(),
+  changedByUserId: uuid("changed_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [index("product_price_history_variant_idx").on(t.variantId, t.effectiveAt)]);
+
+/** A cycle count (brief §46-48). `location_id` reuses Phase 5's `inventory_locations` — no new location
+ *  concept. Significant discrepancies require a manager to approve before the adjustment is applied. */
+export const stocktakes = pgTable("stocktakes", {
+  id: id(),
+  locationId: uuid("location_id").references(() => inventoryLocations.id),
+  status: stocktakeStatus("status").notNull().default("in_progress"),
+  startedByUserId: uuid("started_by_user_id").references(() => users.id),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  notes: text("notes").notNull().default(""),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index("stocktakes_location_idx").on(t.locationId, t.startedAt)]);
+
+export const stocktakeItems = pgTable("stocktake_items", {
+  id: id(),
+  stocktakeId: uuid("stocktake_id").notNull().references(() => stocktakes.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").notNull().references(() => productVariants.id),
+  expectedQuantity: integer("expected_quantity").notNull(),
+  countedQuantity: integer("counted_quantity"),
+  notes: text("notes"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  uniqueIndex("stocktake_items_uq").on(t.stocktakeId, t.variantId),
+  check("stocktake_item_expected_non_negative", sql`${t.expectedQuantity} >= 0`),
+  check("stocktake_item_counted_non_negative", sql`${t.countedQuantity} IS NULL OR ${t.countedQuantity} >= 0`),
+]);
+
+/* ================================================================ Phase 9: finance ================= */
+
+/** Configurable expense category vocabulary (brief §6) — same shape as Phase 6's `customer_tags`, so a
+ *  second bespoke "configurable list" mechanism doesn't get invented for this one purpose. */
+export const expenseCategories = pgTable("expense_categories", {
+  id: id(),
+  name: text("name").notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  position: integer("position").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+/**
+ * An operating expense (brief §6-8). `expense_date` is the accrual date (when the cost was incurred) —
+ * the Management P&L's "operating expenses" line sums APPROVED+PAID rows by this date (brief §4: "SUM
+ * approved/posted"). `paid_at` is the cash date — cash flow only ever sums PAID rows by this date (brief
+ * §12: expense ≠ cash paid until actually paid). Never hard-deleted once APPROVED or PAID (brief §8) —
+ * only DRAFT/PENDING_APPROVAL/REJECTED rows may be deleted, since those never affected a report.
+ */
+export const expenses = pgTable("expenses", {
+  id: id(),
+  expenseNumber: text("expense_number").notNull().unique().default(sql`'EXP-' || lpad(nextval('expense_number_seq')::text, 6, '0')`),
+  categoryId: uuid("category_id").notNull().references(() => expenseCategories.id),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  paymentMethod: text("payment_method"), // cash | bank_transfer | card | cheque | other — free text, same convention as payments.provider
+  supplierId: uuid("supplier_id").references(() => suppliers.id), // optional — reuses Phase 8 suppliers, never a second vendor list
+  referenceNumber: text("reference_number"),
+  notes: text("notes"),
+  attachmentUrl: text("attachment_url"), // URL, same convention as purchase_documents / return photos — no binary upload provider configured
+  status: expenseStatus("status").notNull().default("DRAFT"),
+  expenseDate: timestamp("expense_date", { withTimezone: true }).notNull().defaultNow(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id),
+  approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectedReason: text("rejected_reason"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  index("expenses_status_idx").on(t.status),
+  index("expenses_category_idx").on(t.categoryId),
+  index("expenses_date_idx").on(t.expenseDate),
+  index("expenses_paid_idx").on(t.paidAt),
+  check("expense_amount_positive", sql`${t.amountCents} > 0`),
+]);
+
+/**
+ * One reconciliation record per customer payment (brief §15) — the current state of comparing our record
+ * against the payment provider's own record. `external_amount_cents` is null until checked (live against
+ * Stripe for `provider = 'stripe'` rows, or entered manually for everything else — see
+ * docs/RECONCILIATION.md). Re-checking overwrites the same row rather than appending a new one: this is a
+ * current-state comparison, not a transaction ledger — its own `updated_at` plus the audit log are the history.
+ */
+export const reconciliationRecords = pgTable("reconciliation_records", {
+  id: id(),
+  paymentId: uuid("payment_id").notNull().unique().references(() => payments.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  internalAmountCents: integer("internal_amount_cents").notNull(),
+  externalAmountCents: integer("external_amount_cents"),
+  transactionRef: text("transaction_ref"),
+  status: reconciliationStatus("status").notNull().default("UNMATCHED"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }),
+  reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  notes: text("notes"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  index("reconciliation_records_status_idx").on(t.status),
+  index("reconciliation_records_order_idx").on(t.orderId),
+  check("reconciliation_internal_amount_non_negative", sql`${t.internalAmountCents} >= 0`),
+  check("reconciliation_external_amount_non_negative", sql`${t.externalAmountCents} IS NULL OR ${t.externalAmountCents} >= 0`),
+]);
+
+/** A saved, reproducible report (brief §24) — stores the already-computed figures (`values`), so it reads
+ *  back identically even after later orders/expenses change the live numbers. */
+export const financialReportSnapshots = pgTable("financial_report_snapshots", {
+  id: id(),
+  reportType: text("report_type").notNull(),
+  label: text("label").notNull(),
+  rangeFrom: timestamp("range_from", { withTimezone: true }).notNull(),
+  rangeTo: timestamp("range_to", { withTimezone: true }).notNull(),
+  filters: jsonb("filters"),
+  values: jsonb("values").notNull(),
+  reportVersion: integer("report_version").notNull().default(1),
+  generatedByUserId: uuid("generated_by_user_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (t) => [index("financial_report_snapshots_type_idx").on(t.reportType, t.createdAt)]);

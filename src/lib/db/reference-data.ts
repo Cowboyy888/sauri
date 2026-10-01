@@ -1,6 +1,6 @@
 /** Rows every environment needs (production included). Idempotent. */
 import type { DbOrTx } from "./client";
-import { categories, customerTags, inventoryLocations, loyaltyTiers, roles, salesChannels, settings, shippingMethods } from "./schema";
+import { categories, customerTags, expenseCategories, inventoryLocations, loyaltyTiers, roles, salesChannels, settings, shippingMethods } from "./schema";
 import { STORE } from "../config";
 
 export const ROLE_ROWS = [
@@ -79,6 +79,30 @@ export const DEFAULT_CRM_SETTINGS = {
 /** Earning rule (brief §24) — configurable via /admin/loyalty, never assumed final. */
 export const DEFAULT_LOYALTY_SETTINGS = { enabled: true, pointsPerDollar: 1 };
 
+/** Attribution model + discount-stacking policy (Phase 7 brief §5, §40) — see docs/ATTRIBUTION.md and
+ *  docs/PROMOTIONS.md for exactly what each field means and why the stacking flags are currently inert
+ *  (checkout accepts one discount code per order, which is already the strictest possible policy). */
+export const DEFAULT_MARKETING_SETTINGS = {
+  attributionModel: "LAST_TOUCH" as "FIRST_TOUCH" | "LAST_TOUCH",
+  stacking: { allowLoyaltyWithCoupon: false, allowRewardWithPromotion: false, allowFreeShippingRewardWithCoupon: false },
+  abandonedCartAutomation: { enabled: false, steps: [{ afterHours: 1 }, { afterHours: 24 }, { afterHours: 72 }] },
+};
+
+/** Stocktake approval threshold (Phase 8 brief §48) — configurable, never hardcoded. A discrepancy on any
+ *  single line at or beyond this many units requires OWNER/ADMIN approval before the adjustment is applied. */
+export const DEFAULT_STOCKTAKE_SETTINGS = { approvalThresholdUnits: 10 };
+
+/** Configurable expense category vocabulary (Phase 9 brief §6) — a starting set, editable/extendable by an
+ *  authorized user, same posture as CUSTOMER_TAG_ROWS. */
+export const EXPENSE_CATEGORY_ROWS = [
+  "Rent", "Utilities", "Salaries", "Marketing", "Advertising", "Software", "Shipping", "Packaging",
+  "Equipment", "Maintenance", "Office", "Transportation", "Bank Fees", "Professional Services", "Other",
+].map((name, i) => ({ name, position: i }));
+
+/** Tax configuration surfaced for reporting (Phase 9 brief §17) — mirrors the rate `lib/orders/tax.ts`
+ *  actually applies (`STORE.taxRateBp`); see docs/TAX_REPORTING.md for why this doesn't replace it. */
+export const DEFAULT_TAX_SETTINGS = { enabled: STORE.taxEnabled, taxRateBp: STORE.taxRateBp, label: "Sales tax" };
+
 export async function upsertReferenceData(db: DbOrTx) {
   await db.insert(roles).values(ROLE_ROWS).onConflictDoNothing();
   for (const c of CHANNEL_ROWS) await db.insert(salesChannels).values(c).onConflictDoUpdate({ target: salesChannels.code, set: c });
@@ -87,11 +111,19 @@ export async function upsertReferenceData(db: DbOrTx) {
   for (const l of INVENTORY_LOCATION_ROWS) await db.insert(inventoryLocations).values(l).onConflictDoUpdate({ target: inventoryLocations.code, set: l });
   for (const t of LOYALTY_TIER_ROWS) await db.insert(loyaltyTiers).values(t).onConflictDoUpdate({ target: loyaltyTiers.name, set: t });
   await db.insert(customerTags).values(CUSTOMER_TAG_ROWS).onConflictDoNothing();
+  await db.insert(expenseCategories).values(EXPENSE_CATEGORY_ROWS).onConflictDoNothing();
   await db.insert(settings).values([
-    { key: "store", value: { currency: STORE.currency, timezone: STORE.timezone, taxRateBp: STORE.taxRateBp, freeShippingThresholdCents: STORE.freeShippingThresholdCents } },
+    { key: "store", value: {
+      currency: STORE.currency, timezone: STORE.timezone, taxRateBp: STORE.taxRateBp, freeShippingThresholdCents: STORE.freeShippingThresholdCents,
+      // Phase 8 (brief §17): so the purchase-order PDF never hardcodes company details — editable in /admin/settings.
+      companyName: "SAURI", companyAddress: "", companyEmail: "", companyPhone: "",
+    } },
     { key: "content", value: { announce: "Complimentary shipping on orders over $150", heroTitle: "Jewelry for every moment", heroLede: "Solid gold, lab-grown diamonds and freshwater pearls, designed in our studio to be worn every day and kept for years." } },
     { key: "returns", value: DEFAULT_RETURN_POLICY },
     { key: "crm", value: DEFAULT_CRM_SETTINGS },
     { key: "loyalty", value: DEFAULT_LOYALTY_SETTINGS },
+    { key: "marketing", value: DEFAULT_MARKETING_SETTINGS },
+    { key: "stocktake", value: DEFAULT_STOCKTAKE_SETTINGS },
+    { key: "tax", value: DEFAULT_TAX_SETTINGS },
   ]).onConflictDoNothing();
 }
