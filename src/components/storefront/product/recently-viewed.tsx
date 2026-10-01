@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ProductCard } from "@/components/storefront/shop/product-card";
 import type { ProductCard as ProductCardData } from "@/lib/storefront/catalog";
 
-const KEY = "lumea-recently-viewed";
+const KEY = "sauri-recently-viewed";
 
 export function trackRecentlyViewed(productId: string) {
   try {

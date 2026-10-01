@@ -11,7 +11,7 @@ export default function ContactPage() {
         For order questions, sizing advice or anything else, reach us at the details below. We reply within one business day.
       </p>
       <dl className="mt-8 space-y-4 font-sans text-sm">
-        <div><dt className="text-ink/45">Email</dt><dd className="mt-0.5 text-ink">hello@lumea.example</dd></div>
+        <div><dt className="text-ink/45">Email</dt><dd className="mt-0.5 text-ink">hello@sauri.example</dd></div>
         <div><dt className="text-ink/45">Hours</dt><dd className="mt-0.5 text-ink">Monday–Friday, 9am–6pm</dd></div>
       </dl>
     </article>

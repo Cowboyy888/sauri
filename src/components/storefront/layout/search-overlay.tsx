@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatMoney } from "@/lib/money";
 import type { CategorySummary, SearchResult } from "@/lib/storefront/catalog";
 
-const RECENT_KEY = "lumea-recent-searches";
+const RECENT_KEY = "sauri-recent-searches";
 
 function useRecentSearches() {
   const [recent, setRecent] = useState<string[]>([]);

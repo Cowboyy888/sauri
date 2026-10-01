@@ -52,7 +52,7 @@ export async function startCheckout(db: Db, input: StartCheckoutInput) {
       customer_email: input.customer.email.trim().toLowerCase(),
       client_reference_id: order.orderNumber,
       expires_at: Math.floor(Date.now() / 1000) + STORE.reservationMinutes * 60,
-      integration_identifier: `lumea-${randomSuffix(8)}`,
+      integration_identifier: `sauri-${randomSuffix(8)}`,
       metadata: { orderId: order.id, orderNumber: order.orderNumber },
     });
     if (!session.client_secret) throw new Error("Stripe did not return a client secret.");

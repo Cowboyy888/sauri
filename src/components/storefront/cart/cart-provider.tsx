@@ -14,7 +14,7 @@ export type Quote = {
   discountError: string | null; problems: string[];
 };
 
-const STORAGE_KEY = "lumea-cart";
+const STORAGE_KEY = "sauri-cart";
 const lineKey = (l: Pick<CartLine, "variantId" | "personalization">) => `${l.variantId}|${l.personalization?.initial ?? ""}|${l.personalization?.engraving ?? ""}`;
 
 type CartContextValue = {
