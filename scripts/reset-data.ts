@@ -21,7 +21,11 @@ async function main() {
   const yes = args.includes("--yes");
   const confirm = args.find((a) => a.startsWith("--confirm-db="))?.split("=")[1];
 
-  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  // Same SSL handling as src/lib/db/client.ts: Supabase's pooler presents a cert chain Node can't verify.
+  const parsed = new URL(url);
+  const relaxedSsl = parsed.searchParams.get("sslmode") === "require";
+  parsed.searchParams.delete("sslmode");
+  const pool = new pg.Pool({ connectionString: parsed.toString(), max: 1, ssl: relaxedSsl ? { rejectUnauthorized: false } : undefined });
   const client = await pool.connect();
   try {
     const { rows: [who] } = await client.query<{ db: string; host: string | null }>("select current_database() as db, inet_server_addr()::text as host");
