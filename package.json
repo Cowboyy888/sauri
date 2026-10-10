@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:seed:demo": "tsx scripts/seed.ts --demo"
+    "db:seed:demo": "tsx scripts/seed.ts --demo",
+    "db:reset-data": "tsx scripts/reset-data.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans": "^5.3.0",
