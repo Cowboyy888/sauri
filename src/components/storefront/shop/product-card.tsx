@@ -13,16 +13,16 @@ export function ProductCard({ product, className }: { product: ProductCardData; 
   const badge = product.badge ?? (product.stockStatus === "LOW_STOCK" ? "Low stock" : product.newArrival ? "New" : product.bestSeller ? "Best seller" : null);
 
   return (
-    <article className={cn("group relative flex flex-col", className)}>
+    <article className={cn("shop-scroll-in group relative flex flex-col", className)}>
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-beige-soft">
         <Link href={`/products/${product.slug}`} className="absolute inset-0" aria-label={product.name}>
           {product.image ? (
-            <Image src={product.image.url} alt={product.image.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover transition-opacity duration-500 group-hover:opacity-0" />
+            <Image src={product.image.url} alt={product.image.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover transition-[opacity,transform] duration-700 group-hover:scale-105 group-hover:opacity-0" />
           ) : (
             <div className="flex size-full items-center justify-center font-display text-2xl text-ink/20">{product.name[0]}</div>
           )}
           {product.hoverImage && (
-            <Image src={product.hoverImage.url} alt="" aria-hidden fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+            <Image src={product.hoverImage.url} alt="" aria-hidden fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover opacity-0 transition-[opacity,transform] duration-700 group-hover:scale-105 group-hover:opacity-100" />
           )}
         </Link>
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">

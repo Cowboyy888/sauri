@@ -43,7 +43,7 @@ export function Header({ categories }: { categories: CategorySummary[] }) {
           <button type="button" onClick={open} aria-label={`Bag, ${count} item${count === 1 ? "" : "s"}`} className="relative p-2">
             <ShoppingBag className="size-[18px]" />
             {count > 0 && (
-              <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-ink font-sans text-[9px] text-warm-white">{count}</span>
+              <span key={count} className="shop-bump absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-ink font-sans text-[9px] text-warm-white">{count}</span>
             )}
           </button>
         </div>

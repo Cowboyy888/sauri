@@ -8,7 +8,7 @@ import { useCart } from "@/components/storefront/cart/cart-provider";
  *  the shopper to the product page to choose material, size or gemstone first (brief §25). */
 export function QuickAddButton({ productSlug, singleVariantId, disabled, className }: { productSlug: string; singleVariantId: string | null; disabled?: boolean; className?: string }) {
   const { addLine } = useCart();
-  const base = "inline-flex h-9 items-center justify-center gap-1.5 border border-ink bg-ink px-3 font-sans text-xs uppercase tracking-[0.12em] text-warm-white transition-colors hover:bg-ink/85 disabled:cursor-not-allowed disabled:border-ink/20 disabled:bg-transparent disabled:text-ink/35";
+  const base = "shop-press inline-flex h-9 items-center justify-center gap-1.5 border border-ink bg-ink px-3 font-sans text-xs uppercase tracking-[0.12em] text-warm-white transition-colors hover:bg-ink/85 disabled:cursor-not-allowed disabled:border-ink/20 disabled:bg-transparent disabled:text-ink/35";
 
   if (disabled) return <button type="button" disabled className={cn(base, className)}>Sold out</button>;
 

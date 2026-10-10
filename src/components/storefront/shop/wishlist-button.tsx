@@ -30,7 +30,7 @@ export function WishlistButton({ productId, className, size = "md" }: { productI
         className,
       )}
     >
-      <Heart className={cn(size === "sm" ? "size-4" : "size-[18px]", active && "fill-ink")} />
+      <Heart key={String(active)} className={cn(size === "sm" ? "size-4" : "size-[18px]", active && "shop-pop fill-ink")} />
     </button>
   );
 }

@@ -45,8 +45,6 @@ export default async function FinanceOverviewPage({ searchParams }: { searchPara
               <KPICard label="COGS" value={moneyKpi(res.data.cur.cogsCents)} change={pctChange(res.data.cur.cogsCents, res.data.prev.cogsCents)} comparison={cmp} invert />
               <KPICard label="Gross profit" value={moneyKpi(res.data.cur.grossProfitCents)} change={pctChange(res.data.cur.grossProfitCents, res.data.prev.grossProfitCents)} comparison={cmp} />
               <KPICard label="Gross margin" value={naPct(res.data.cur.grossMarginPct)} change={res.data.cur.grossMarginPct != null && res.data.prev.grossMarginPct != null ? pctChange(res.data.cur.grossMarginPct, res.data.prev.grossMarginPct) : null} comparison={cmp} />
-              <KPICard label="Operating expenses" value={moneyKpi(res.data.cur.operatingExpensesCents)} change={pctChange(res.data.cur.operatingExpensesCents, res.data.prev.operatingExpensesCents)} comparison={cmp} invert href="/admin/finance/expenses" />
-              <KPICard label="Operating profit" value={moneyKpi(res.data.cur.operatingProfitCents)} change={pctChange(res.data.cur.operatingProfitCents, res.data.prev.operatingProfitCents)} comparison={cmp} />
               <KPICard label="Operating margin" value={naPct(res.data.cur.operatingMarginPct)} change={res.data.cur.operatingMarginPct != null && res.data.prev.operatingMarginPct != null ? pctChange(res.data.cur.operatingMarginPct, res.data.prev.operatingMarginPct) : null} comparison={cmp} />
             </CardBody>
           </Card>
@@ -62,8 +60,6 @@ export default async function FinanceOverviewPage({ searchParams }: { searchPara
             <CardHeader title="Purchasing" />
             <CardBody className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <KPICard label="Total purchases" value={moneyKpi(res.data.cur.totalPurchasesCents)} change={pctChange(res.data.cur.totalPurchasesCents, res.data.prev.totalPurchasesCents)} comparison={cmp} />
-              <KPICard label="Outstanding supplier payments" value={moneyKpi(res.data.cur.outstandingSupplierPaymentsCents)} change={null} comparison="" note="Current position" href="/admin/finance/supplier-payments" />
-              <KPICard label="Overdue supplier payments" value={moneyKpi(res.data.cur.overdueSupplierPaymentsCents)} change={null} comparison="" note="Current position" tone={res.data.cur.overdueSupplierPaymentsCents > 0 ? "warn" : undefined} href="/admin/finance/supplier-payments" />
             </CardBody>
           </Card>
           <p className="text-xs text-subtle">All figures are computed server-side from the same records used throughout the admin (orders, payments, purchase orders, expenses) — see <a href="/admin/finance/reports" className="underline">Reports</a> for exports.</p>

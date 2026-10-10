@@ -17,7 +17,7 @@ export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; m
 const ICONS = { dashboard: LayoutDashboard, sales: LineChart, orders: ShoppingBag, products: Gem, inventory: Boxes, customers: Users, analytics: BarChart3, discounts: Percent, reports: FileSpreadsheet, reviews: Star, content: BookOpen, settings: Settings, audit: History, receipt: Receipt, fulfillment: Truck, returns: Undo2, loyalty: Award, marketing: ShoppingCart, suppliers: Building2, purchases: ClipboardList, finance: Landmark };
 export type ShellUser = { name: string; email: string; role: string };
 
-const RANGE_PATHS = ["/admin/dashboard", "/admin/analytics", "/admin/reports", "/admin/orders", "/admin/products", "/admin/marketing", "/admin/finance"];
+const RANGE_PATHS = ["/admin/dashboard", "/admin/analytics", "/admin/reports", "/admin/orders", "/admin/products", "/admin/finance"];
 
 function NavList({ items, collapsed, onNavigate }: { items: NavItem[]; collapsed?: boolean; onNavigate?: () => void }) {
   const path = usePathname();
@@ -71,8 +71,7 @@ export function AdminShell({ nav, user, signOut, searchScopes, children }: { nav
   useEffect(() => { try { setCollapsed(localStorage.getItem("sauri:nav") === "1"); } catch { /* storage unavailable */ } }, []);
   const toggle = () => { setCollapsed((c) => { try { localStorage.setItem("sauri:nav", c ? "0" : "1"); } catch { /* ignore */ } return !c; }); };
   // Date range applies to analytics-style pages (and a product's analytics); not to order detail or forms.
-  // /admin/marketing itself is the range-bound hub; its campaign/promotion/email/calendar sub-pages manage their own lists, not a date range.
-  const showRange = RANGE_PATHS.some((p) => path === p || path.startsWith(p + "/")) && !/^\/admin\/orders\/[^/]+$/.test(path) && path !== "/admin/products/new" && !(path.startsWith("/admin/marketing/") && path !== "/admin/marketing");
+  const showRange = RANGE_PATHS.some((p) => path === p || path.startsWith(p + "/")) && !/^\/admin\/orders\/[^/]+$/.test(path) && path !== "/admin/products/new";
 
   return (
     <div className="admin min-h-dvh md:flex">

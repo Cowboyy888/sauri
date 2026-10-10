@@ -29,11 +29,6 @@ import {
 } from "@/lib/crm/customer-management";
 import { setCrmSettings } from "@/lib/crm/segments";
 import { adjustPoints, saveReward, saveTier, setLoyaltySettings } from "@/lib/loyalty/service";
-import { createCampaign, logCampaignCost, setCampaignStatus, updateCampaign } from "@/lib/marketing/campaigns";
-import { createPromotion, deletePromotion, setPromotionActive, updatePromotion } from "@/lib/marketing/promotions";
-import { createEmailCampaign, cancelEmailCampaign, scheduleEmailCampaign, sendEmailCampaignNow } from "@/lib/marketing/email-campaigns";
-import { sendAbandonedCartRecoveryNow } from "@/lib/marketing/abandoned-carts";
-import { setMarketingSettings } from "@/lib/marketing/settings";
 import { createSupplier, updateSupplier, setSupplierStatus, upsertSupplierProduct, removeSupplierProduct } from "@/lib/purchasing/suppliers";
 import { createPurchaseOrder, updatePurchaseOrder, setPurchaseOrderStatus, addPurchaseDocument, removePurchaseDocument, sendPurchaseOrderEmail, recordPurchasePayment, type PurchaseOrderItemInput } from "@/lib/purchasing/orders";
 import { receivePurchaseOrder, type ReceiveLine } from "@/lib/purchasing/receiving";
@@ -333,115 +328,6 @@ export async function toggleDiscountAction(id: string, active: boolean) { return
 const Role = z.enum(["OWNER", "ADMIN", "SALES", "INVENTORY", "VIEWER"]);
 export async function updateStaffAction(userId: string, patch: { role?: string; active?: boolean }) { return act("staff:write", async (actor) => { await updateStaff(getDb(), actor, uuid.parse(userId), { role: patch.role ? Role.parse(patch.role) : undefined, active: patch.active }); }, "Staff updated"); }
 export async function addStaffAction(input: { email: string; name: string; role: string }) { return act("staff:write", async (actor) => { await addStaff(getDb(), actor, { email: z.string().email("Enter a valid email.").parse(input.email), name: z.string().max(80).parse(input.name), role: Role.parse(input.role) }); }, "Staff member added. They can sign in with this email."); }
-
-/* ---------------- marketing: campaigns (Phase 7) ---------------- */
-const NewCampaign = z.object({
-  name: z.string().trim().min(1, "Enter a campaign name.").max(120), slug: z.string().trim().min(2, "Enter a campaign ID.").max(40),
-  source: z.string().trim().min(1, "Enter a source.").max(60), medium: z.string().trim().min(1, "Enter a medium.").max(60),
-  budget: optDollars("Budget"), description: z.string().trim().max(1000).optional(),
-  startDate: z.union([z.literal(""), z.coerce.date()]).optional(), endDate: z.union([z.literal(""), z.coerce.date()]).optional(),
-});
-export async function createCampaignAction(input: z.input<typeof NewCampaign>) {
-  return act("marketing:write", async (actor) => {
-    const v = NewCampaign.parse(input);
-    await createCampaign(getDb(), actor, { name: v.name, slug: v.slug, source: v.source, medium: v.medium, budgetCents: v.budget, description: v.description, startDate: v.startDate || null, endDate: v.endDate || null });
-  }, "Campaign created");
-}
-export async function updateCampaignAction(id: string, input: z.input<typeof NewCampaign>) {
-  return act("marketing:write", async (actor) => {
-    const v = NewCampaign.parse(input);
-    await updateCampaign(getDb(), actor, uuid.parse(id), { name: v.name, source: v.source, medium: v.medium, budgetCents: v.budget, description: v.description, startDate: v.startDate || null, endDate: v.endDate || null });
-  }, "Campaign updated");
-}
-export async function setCampaignStatusAction(id: string, status: string) {
-  return act("marketing:write", async (actor) => { await setCampaignStatus(getDb(), actor, uuid.parse(id), z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]).parse(status)); }, "Campaign status updated");
-}
-const NewCost = z.object({ campaignId: uuid, amount: dollars("Amount"), incurredAt: z.union([z.literal(""), z.coerce.date()]).optional(), note: z.string().trim().max(300).optional() });
-export async function logCampaignCostAction(input: z.input<typeof NewCost>) {
-  return act("marketing:write", async (actor) => {
-    const v = NewCost.parse(input);
-    await logCampaignCost(getDb(), actor, { campaignId: v.campaignId, amountCents: v.amount, incurredAt: v.incurredAt || undefined, note: v.note });
-  }, "Spend logged");
-}
-
-/* ---------------- marketing: promotions & coupons (Phase 7) ---------------- */
-const csvIds = z.string().optional().transform((s) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 200));
-const PromotionInputSchema = z.object({
-  id: uuid.optional(), name: z.string().trim().max(120).optional(), code: z.string().trim().min(3).max(20),
-  type: z.enum(["percent", "fixed", "free_shipping"]), value: z.coerce.number().min(0).max(1_000_000).optional(),
-  eligibleProductIds: csvIds, excludedProductIds: csvIds, eligibleCollectionIds: csvIds, excludedCollectionIds: csvIds,
-  eligibleSegments: z.array(z.string()).optional(), firstOrderOnly: z.boolean().optional(),
-  minSubtotal: optDollars("Minimum order"), maxDiscount: optDollars("Maximum discount"),
-  startsAt: z.union([z.literal(""), z.coerce.date()]).optional(), endsAt: z.union([z.literal(""), z.coerce.date()]).optional(),
-  usageLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional(), perCustomerLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional(),
-  campaignId: z.union([z.literal(""), uuid]).optional(),
-});
-export async function savePromotionAction(input: z.input<typeof PromotionInputSchema>) {
-  return act("marketing:write", async (actor) => {
-    const v = PromotionInputSchema.parse(input);
-    const payload = {
-      name: v.name, type: v.type, value: v.type === "percent" ? v.value : v.type === "fixed" ? Math.round((v.value ?? 0) * 100) : 0,
-      eligibleProductIds: v.eligibleProductIds, excludedProductIds: v.excludedProductIds, eligibleCollectionIds: v.eligibleCollectionIds, excludedCollectionIds: v.excludedCollectionIds,
-      eligibleSegments: v.eligibleSegments, firstOrderOnly: v.firstOrderOnly,
-      minSubtotalCents: v.minSubtotal ?? undefined, maxDiscountCents: v.maxDiscount,
-      startsAt: v.startsAt || undefined, endsAt: v.endsAt || null,
-      usageLimit: v.usageLimit === "" ? null : v.usageLimit, perCustomerLimit: v.perCustomerLimit === "" ? null : v.perCustomerLimit,
-      campaignId: v.campaignId || null,
-    };
-    if (v.id) await updatePromotion(getDb(), actor, v.id, payload); else await createPromotion(getDb(), actor, { ...payload, code: v.code });
-  }, "Promotion saved");
-}
-export async function setPromotionActiveAction(id: string, active: boolean) {
-  return act("marketing:write", async (actor) => { await setPromotionActive(getDb(), actor, uuid.parse(id), active); }, active ? "Promotion activated" : "Promotion paused");
-}
-export async function deletePromotionAction(id: string) {
-  return act("marketing:write", async (actor) => { await deletePromotion(getDb(), actor, uuid.parse(id)); }, "Promotion deleted");
-}
-
-/* ---------------- marketing: email campaigns (Phase 7) ---------------- */
-const NewEmailCampaignSchema = z.object({
-  name: z.string().trim().min(1).max(120), subject: z.string().trim().min(1).max(200), previewText: z.string().trim().max(200).optional(), content: z.string().trim().min(1).max(20_000),
-  audienceType: z.enum(["segment", "loyalty_members", "bought_category", "has_wishlist_items"]), segmentKey: z.string().optional(), categoryId: z.union([z.literal(""), uuid]).optional(),
-  campaignId: z.union([z.literal(""), uuid]).optional(),
-});
-export async function createEmailCampaignAction(input: z.input<typeof NewEmailCampaignSchema>) {
-  return act("marketing:write", async (actor) => {
-    const v = NewEmailCampaignSchema.parse(input);
-    await createEmailCampaign(getDb(), actor, {
-      name: v.name, subject: v.subject, previewText: v.previewText, content: v.content, campaignId: v.campaignId || null,
-      audience: { type: v.audienceType, segmentKey: v.segmentKey, categoryId: v.categoryId || undefined },
-    });
-  }, "Email campaign created");
-}
-export async function scheduleEmailCampaignAction(id: string, scheduledAt: string) {
-  return act("marketing:write", async (actor) => { await scheduleEmailCampaign(getDb(), actor, uuid.parse(id), new Date(scheduledAt)); }, "Scheduled");
-}
-export async function cancelEmailCampaignAction(id: string) {
-  return act("marketing:write", async (actor) => { await cancelEmailCampaign(getDb(), actor, uuid.parse(id)); }, "Cancelled");
-}
-export async function sendEmailCampaignNowAction(id: string) {
-  return act("marketing:write", async (actor) => { await sendEmailCampaignNow(getDb(), actor, uuid.parse(id)); }, "Sent");
-}
-
-/* ---------------- marketing: abandoned-cart recovery & settings (Phase 7) ---------------- */
-export async function sendAbandonedCartRecoveryAction(cartId: string) {
-  return act("marketing:write", async (actor) => { await sendAbandonedCartRecoveryNow(getDb(), actor, uuid.parse(cartId)); }, "Recovery email sent");
-}
-const MarketingSettingsSchema = z.object({
-  attributionModel: z.enum(["FIRST_TOUCH", "LAST_TOUCH"]),
-  allowLoyaltyWithCoupon: z.boolean().optional(), allowRewardWithPromotion: z.boolean().optional(), allowFreeShippingRewardWithCoupon: z.boolean().optional(),
-  abandonedCartAutomationEnabled: z.boolean().optional(),
-});
-export async function setMarketingSettingsAction(input: z.input<typeof MarketingSettingsSchema>) {
-  return act("marketing:write", async (actor) => {
-    const v = MarketingSettingsSchema.parse(input);
-    await setMarketingSettings(getDb(), actor, {
-      attributionModel: v.attributionModel,
-      stacking: { allowLoyaltyWithCoupon: !!v.allowLoyaltyWithCoupon, allowRewardWithPromotion: !!v.allowRewardWithPromotion, allowFreeShippingRewardWithCoupon: !!v.allowFreeShippingRewardWithCoupon },
-      abandonedCartAutomation: { enabled: !!v.abandonedCartAutomationEnabled, steps: [{ afterHours: 1 }, { afterHours: 24 }, { afterHours: 72 }] },
-    });
-  }, "Marketing settings saved");
-}
 
 /* ---------------- suppliers (Phase 8) ---------------- */
 const SupplierInput = z.object({

@@ -30,6 +30,6 @@ export function KPICard({ label, value, change, comparison, hint, invert, tone, 
       {hint && <p className="mt-1 text-xs text-subtle">{hint}</p>}
     </>
   );
-  const cls = "block min-w-0 rounded-lg border border-line bg-surface p-4";
+  const cls = "admin-rise block min-w-0 rounded-lg border border-line bg-surface p-4 transition-[border-color,box-shadow] duration-200 hover:shadow-[0_2px_10px_rgba(0,0,0,.05)]";
   return href ? <a href={href} className={cn(cls, "hover:border-[#cfccc4]")}>{body}</a> : <div className={cls}>{body}</div>;
 }

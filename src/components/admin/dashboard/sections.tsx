@@ -64,12 +64,8 @@ export async function FinanceKpiSection({ db, r, fail, canFinance }: Ctx) {
   const { s, refundRatePct } = res.data;
   return (
     <section aria-label="Finance" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <KPICard label="Operating expenses" value={moneyKpi(s.operatingExpensesCents)} change={null} comparison="" href="/admin/finance/expenses" />
-      <KPICard label="Operating profit" value={moneyKpi(s.operatingProfitCents)} change={null} comparison="" href="/admin/finance" />
       <KPICard label="Cash in / out" value={`${moneyKpi(s.cashInCents)} / ${moneyKpi(s.cashOutCents)}`} change={null} comparison="" href="/admin/finance/cash-flow" />
       <KPICard label="Net cash flow" value={moneyKpi(s.netCashFlowCents)} change={null} comparison="" tone={s.netCashFlowCents < 0 ? "neg" : undefined} href="/admin/finance/cash-flow" />
-      <KPICard label="Outstanding supplier payments" value={moneyKpi(s.outstandingSupplierPaymentsCents)} change={null} comparison="" note="Current position" href="/admin/finance/supplier-payments" />
-      <KPICard label="Overdue supplier payments" value={moneyKpi(s.overdueSupplierPaymentsCents)} change={null} comparison="" note="Current position" tone={s.overdueSupplierPaymentsCents > 0 ? "warn" : undefined} href="/admin/finance/supplier-payments" />
       <KPICard label="Refund rate" value={refundRatePct == null ? "N/A" : pct(refundRatePct)} change={null} comparison="" href="/admin/finance/refunds" />
     </section>
   );

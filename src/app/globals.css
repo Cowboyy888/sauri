@@ -51,8 +51,43 @@
 
 @keyframes shop-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .shop-reveal { animation: shop-fade-up .6s cubic-bezier(.22,.61,.36,1) both; }
+/* Staggered hero entrance: pair .shop-reveal with a delay step. */
+.shop-delay-1 { animation-delay: .12s; }
+.shop-delay-2 { animation-delay: .24s; }
+.shop-delay-3 { animation-delay: .38s; }
+
+/* Slow Ken Burns drift on the hero image. */
+@keyframes shop-drift { from { transform: scale(1); } to { transform: scale(1.08); } }
+.shop-drift { animation: shop-drift 18s ease-out both; }
+
+/* Reveal on scroll. Progressive enhancement: browsers without scroll-driven animations show the content as-is. */
+@keyframes shop-scroll-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@supports (animation-timeline: view()) {
+  .shop-scroll-in {
+    animation: shop-scroll-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 55%;
+  }
+}
+
+/* Underline that draws in from the left on hover/focus. */
+.shop-link-line { background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat; transition: background-size .35s cubic-bezier(.22,.61,.36,1); }
+.shop-link-line:hover, .shop-link-line:focus-visible { background-size: 100% 1px; }
+
+/* Pop when a wishlist heart is filled, bump when the bag count changes. */
+@keyframes shop-pop { 0% { transform: scale(1); } 40% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.shop-pop { animation: shop-pop .35s cubic-bezier(.34,1.56,.64,1); }
+@keyframes shop-bump { 0% { transform: scale(.4); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.shop-bump { animation: shop-bump .35s cubic-bezier(.34,1.56,.64,1); }
+
+/* Press feedback for buttons and links styled as buttons. */
+.shop-press { transition: transform .15s ease, background-color .2s ease, border-color .2s ease; }
+.shop-press:active { transform: scale(.97); }
+
 @media (prefers-reduced-motion: reduce) {
-  .shop-reveal { animation: none; }
+  .shop-reveal, .shop-drift, .shop-scroll-in, .shop-pop, .shop-bump { animation: none; }
+  .shop-link-line, .shop-press { transition: none; }
+  .shop-press:active { transform: none; }
   * { scroll-behavior: auto !important; }
 }
 .shop-hairline { border-color: color-mix(in srgb, var(--color-ink) 12%, transparent); }
@@ -70,6 +105,13 @@
 @keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
 .skeleton { background: linear-gradient(90deg, #eeede9 0, #f6f5f2 50%, #eeede9 100%); background-size: 800px 100%; animation: shimmer 1.4s linear infinite; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Admin: figures and panels rise in, toasts slide in. */
+@keyframes admin-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.admin-rise { animation: admin-rise .35s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes admin-toast-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.admin-toast-in { animation: admin-toast-in .25s cubic-bezier(.22,.61,.36,1) both; }
+@media (prefers-reduced-motion: reduce) { .admin-rise, .admin-toast-in { animation: none; } }
 
 /* Recharts: quiet axes */
 .admin .recharts-cartesian-axis-tick-value { fill: var(--color-subtle); font-size: 11px; }
