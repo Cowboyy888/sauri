@@ -21,9 +21,18 @@ export default async function StaffLogin({ searchParams }: { searchParams: Promi
   return (
     <main className="admin relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
       <div className="login-bg" aria-hidden="true">
-        <span className="login-blob login-blob-1" />
-        <span className="login-blob login-blob-2" />
-        <span className="login-blob login-blob-3" />
+        <span className="login-spark" style={{ top: "8%", left: "12%", "--s": "18px", "--delay": "0s", "--d": "6s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "22%", left: "70%", "--s": "10px", "--delay": "1.2s", "--d": "5s", "--c": "#2f5d50" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "15%", left: "40%", "--s": "12px", "--delay": "2.4s", "--d": "7s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "34%", left: "88%", "--s": "16px", "--delay": "0.6s", "--d": "6s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "48%", left: "6%", "--s": "14px", "--delay": "3.1s", "--d": "5s", "--c": "#2f5d50" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "58%", left: "30%", "--s": "10px", "--delay": "1.8s", "--d": "8s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "66%", left: "78%", "--s": "20px", "--delay": "0.3s", "--d": "7s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "76%", left: "14%", "--s": "12px", "--delay": "2.9s", "--d": "6s", "--c": "#2f5d50" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "84%", left: "52%", "--s": "16px", "--delay": "1.5s", "--d": "5s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "90%", left: "86%", "--s": "10px", "--delay": "3.6s", "--d": "7s", "--c": "#2f5d50" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "42%", left: "58%", "--s": "10px", "--delay": "4.2s", "--d": "6s", "--c": "#b89c6c" } as React.CSSProperties} />
+        <span className="login-spark" style={{ top: "28%", left: "22%", "--s": "10px", "--delay": "0.9s", "--d": "9s", "--c": "#2f5d50" } as React.CSSProperties} />
       </div>
       <div className="relative w-full max-w-sm admin-rise">
         <p className="mb-6 text-center font-display text-[20px] tracking-[0.32em]">SAURI</p>
