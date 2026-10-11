@@ -63,7 +63,7 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
           <div><h2 className="text-[14px] font-semibold">First variant</h2><p className="text-xs text-muted">Add more sizes, metals or stones on the Variants tab after saving.</p></div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Material"><Select name="material" defaultValue="yg">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-            <Field label="SKU" hint="Letters, numbers and dashes"><Input name="sku" required pattern="[A-Za-z0-9-]{3,40}" placeholder="RNG-NEW-YG-6" style={{ textTransform: "uppercase" }} /></Field>
+            <Field label="SKU" hint="Leave blank to auto-generate (category-code-material-size)."><Input name="sku" maxLength={40} placeholder="Auto-generated" style={{ textTransform: "uppercase" }} /></Field>
             <Field label="Size"><Input name="size" placeholder="e.g. 6 or 18&quot;" /></Field>
             <Field label="Color"><Input name="color" placeholder="Optional" /></Field>
             <Field label="Gemstone"><Input name="gemstone" placeholder="Optional" /></Field>
@@ -190,7 +190,7 @@ export function AddVariantForm({ productId, skuPrefix }: { productId: string; sk
         })}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Material"><Select name="material">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-            <Field label="SKU"><Input name="sku" required defaultValue={`${skuPrefix}-`} style={{ textTransform: "uppercase" }} /></Field>
+            <Field label="SKU" hint="Leave blank to auto-generate."><Input name="sku" maxLength={40} placeholder={`${skuPrefix}-…`} style={{ textTransform: "uppercase" }} /></Field>
             <Field label="Size"><Input name="size" /></Field><Field label="Gemstone"><Input name="gemstone" /></Field>
             <Field label="Color"><Input name="color" /></Field><Field label="Style"><Input name="style" /></Field>
             <Field label="Barcode"><Input name="barcode" /></Field>

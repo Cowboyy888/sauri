@@ -262,7 +262,7 @@ const NewProduct = z.object({
   categoryId: uuid, collectionId: z.union([z.literal(""), uuid]).optional(), status: z.enum(["draft", "active", "archived"]),
   featured: z.boolean().optional(), bestSeller: z.boolean().optional(), newArrival: z.boolean().optional(),
   material: z.enum(["yg", "wg", "vm", "ss"]), color: z.string().trim().max(40).optional(), size: z.string().trim().max(20).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(),
-  sku: z.string().trim().min(3, "Enter a SKU.").max(40), barcode: z.string().trim().max(40).optional(),
+  sku: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(),
   costPrice: dollars("Cost price"), sellingPrice: dollars("Selling price"), compareAtPrice: optDollars("Compare-at price"),
   weightGrams: z.union([z.literal(""), z.coerce.number().min(0).max(10_000)]).optional(), reorderLevel: z.coerce.number().int().min(0).max(10_000).optional(),
   seoTitle: z.string().trim().max(70).optional(), seoDescription: z.string().trim().max(160).optional(), canonicalUrl: z.string().trim().max(300).optional(), brand: z.string().trim().max(80).optional(), careInstructions: z.string().trim().max(1000).optional(),
@@ -295,7 +295,7 @@ export async function updateVariantAction(input: z.input<typeof VPatch>) {
     await updateVariant(getDb(), actor, v.variantId, { sellingPriceCents: v.sellingPrice, costPriceCents: v.costPrice, compareAtPriceCents: v.compareAtPrice, barcode: v.barcode === undefined ? undefined : v.barcode || null, status: v.status });
   }, "Variant saved");
 }
-const NewVariant = z.object({ productId: uuid, sku: z.string().trim().min(3).max(40), material: z.enum(["yg", "wg", "vm", "ss"]), size: z.string().trim().max(20).optional(), color: z.string().trim().max(40).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(), sellingPrice: dollars("Selling price"), costPrice: dollars("Cost price"), compareAtPrice: optDollars("Compare-at price"), reorderLevel: z.coerce.number().int().min(0).optional() });
+const NewVariant = z.object({ productId: uuid, sku: z.string().trim().max(40).optional(), material: z.enum(["yg", "wg", "vm", "ss"]), size: z.string().trim().max(20).optional(), color: z.string().trim().max(40).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(), sellingPrice: dollars("Selling price"), costPrice: dollars("Cost price"), compareAtPrice: optDollars("Compare-at price"), reorderLevel: z.coerce.number().int().min(0).optional() });
 export async function addVariantAction(input: z.input<typeof NewVariant>) {
   return act("products:write", async (actor) => { const v = NewVariant.parse(input); await addVariant(getDb(), actor, v.productId, { ...v, sellingPriceCents: v.sellingPrice, costPriceCents: v.costPrice, compareAtPriceCents: v.compareAtPrice }); }, "Variant added. Restock it to start selling.");
 }

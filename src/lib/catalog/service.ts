@@ -26,9 +26,22 @@ export type NewProductInput = {
   status: "draft" | "active" | "archived"; featured?: boolean; bestSeller?: boolean; newArrival?: boolean;
   seoTitle?: string; seoDescription?: string; canonicalUrl?: string; brand?: string; careInstructions?: string; tags?: string[];
   material: string; color?: string | null; size?: string | null; gemstone?: string | null; style?: string | null;
-  sku: string; barcode?: string | null; costPriceCents: number; sellingPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number;
+  sku?: string | null; barcode?: string | null; costPriceCents: number; sellingPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number;
   reorderLevel?: number; imageUrls?: string[];
 };
+
+/** Tidies a typed SKU: upper-case, spaces/underscores/slashes/dots become dashes, anything else is dropped, dashes collapsed. */
+export function normalizeSku(raw: string): string {
+  return raw.trim().toUpperCase().replace(/[\s_./\\]+/g, "-").replace(/[^A-Z0-9-]/g, "").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** PREFIX-CODE-MATERIAL[-SIZE][-GEM], e.g. RNG-NEW-YG-6 (same shape as the seeded SKUs); a numeric suffix is added until unique. */
+async function generateSku(tx: Pick<Db, "select">, parts: { prefix: string; code: string; material: string; size?: string | null; gemstone?: string | null }) {
+  const base = normalizeSku([parts.prefix, parts.code, parts.material, parts.size?.replace(/"/g, "IN"), parts.gemstone?.slice(0, 2)].filter(Boolean).join("-")).slice(0, 36);
+  let sku = base;
+  for (let i = 2; (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, sku))).length; i++) sku = `${base}-${i}`;
+  return sku;
+}
 
 export async function createProduct(db: Db, actor: Actor, input: NewProductInput) {
   assertCan(actor, "products:write");
@@ -36,20 +49,21 @@ export async function createProduct(db: Db, actor: Actor, input: NewProductInput
   if (!name) throw new ValidationError("Enter a product name.");
   const slug = slugify(input.slug?.trim() || name);
   if (!slug) throw new ValidationError("Enter a valid URL slug.");
-  const sku = input.sku.trim().toUpperCase();
-  if (!/^[A-Z0-9-]{3,40}$/.test(sku)) throw new ValidationError("SKU must be 3–40 letters, numbers or dashes.");
+  const typedSku = normalizeSku(input.sku ?? "");
+  if (typedSku && !/^[A-Z0-9-]{3,40}$/.test(typedSku)) throw new ValidationError("SKU must be 3–40 characters long, using letters, numbers or dashes (e.g. RNG-NEW-YG-6). Leave it blank to auto-generate.");
   if (!MATERIALS.includes(input.material as (typeof MATERIALS)[number])) throw new ValidationError("Choose a material.");
   checkPrices(input);
   input.imageUrls?.forEach(checkImageUrl);
   return db.transaction(async (tx) => {
     if ((await tx.select({ id: products.id }).from(products).where(eq(products.slug, slug))).length) throw new ValidationError("Another product already uses that URL slug.");
-    if ((await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, sku))).length) throw new ValidationError(`SKU ${sku} is already in use.`);
+    if (typedSku && (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, typedSku))).length) throw new ValidationError(`SKU ${typedSku} is already in use.`);
     const [cat] = await tx.select().from(categories).where(eq(categories.id, input.categoryId));
     if (!cat) throw new ValidationError("Choose a category.");
     // Product code (the middle of generated SKUs): letters from the name, made unique.
     const base = (name.replace(/[^A-Za-z]/g, "").slice(0, 3) || "PRD").toUpperCase();
     let code = base;
     for (let i = 2; (await tx.select({ id: products.id }).from(products).where(eq(products.code, code))).length; i++) code = `${base}${i}`;
+    const sku = typedSku || await generateSku(tx, { prefix: cat.skuPrefix, code, material: input.material, size: input.size, gemstone: input.gemstone });
     const [p] = await tx.insert(products).values({
       name, slug, code, shortDescription: input.shortDescription?.trim() ?? "", description: input.description?.trim() ?? "", categoryId: cat.id, collectionId: input.collectionId || null,
       status: input.status, featured: !!input.featured, bestSeller: !!input.bestSeller, newArrival: !!input.newArrival,
@@ -115,15 +129,17 @@ export async function updateVariant(db: Db, actor: Actor, variantId: string, pat
   });
 }
 
-export async function addVariant(db: Db, actor: Actor, productId: string, v: { sku: string; material: string; color?: string | null; size?: string | null; gemstone?: string | null; style?: string | null; barcode?: string | null; sellingPriceCents: number; costPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number; reorderLevel?: number }) {
+export async function addVariant(db: Db, actor: Actor, productId: string, v: { sku?: string | null; material: string; color?: string | null; size?: string | null; gemstone?: string | null; style?: string | null; barcode?: string | null; sellingPriceCents: number; costPriceCents: number; compareAtPriceCents?: number | null; weightMg?: number; reorderLevel?: number }) {
   assertCan(actor, "products:write");
-  const sku = v.sku.trim().toUpperCase();
-  if (!/^[A-Z0-9-]{3,40}$/.test(sku)) throw new ValidationError("SKU must be 3–40 letters, numbers or dashes.");
+  const typedSku = normalizeSku(v.sku ?? "");
+  if (typedSku && !/^[A-Z0-9-]{3,40}$/.test(typedSku)) throw new ValidationError("SKU must be 3–40 characters long, using letters, numbers or dashes (e.g. RNG-NEW-YG-6). Leave it blank to auto-generate.");
   if (!MATERIALS.includes(v.material as (typeof MATERIALS)[number])) throw new ValidationError("Choose a material.");
   checkPrices(v);
   return db.transaction(async (tx) => {
-    if (!(await tx.select({ id: products.id }).from(products).where(eq(products.id, productId))).length) throw new NotFoundError("Product not found.");
-    if ((await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, sku))).length) throw new ValidationError(`SKU ${sku} is already in use.`);
+    const [prod] = await tx.select({ code: products.code, prefix: categories.skuPrefix }).from(products).innerJoin(categories, eq(categories.id, products.categoryId)).where(eq(products.id, productId));
+    if (!prod) throw new NotFoundError("Product not found.");
+    if (typedSku && (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, typedSku))).length) throw new ValidationError(`SKU ${typedSku} is already in use.`);
+    const sku = typedSku || await generateSku(tx, { prefix: prod.prefix, code: prod.code, material: v.material, size: v.size, gemstone: v.gemstone });
     const [row] = await tx.insert(productVariants).values({ productId, sku, material: v.material, color: v.color || null, size: v.size || null, gemstone: v.gemstone || null, barcode: v.barcode || null, sellingPriceCents: v.sellingPriceCents, costPriceCents: v.costPriceCents, compareAtPriceCents: v.compareAtPriceCents ?? null, weightMg: v.weightMg ?? 0 }).returning();
     await tx.insert(inventory).values({ variantId: row!.id, stockQuantity: 0, reorderLevel: v.reorderLevel ?? 5 });
     await tx.insert(productPriceHistory).values({ variantId: row!.id, sellingPriceCents: v.sellingPriceCents, compareAtPriceCents: v.compareAtPriceCents ?? null, changedByUserId: actor.userId });

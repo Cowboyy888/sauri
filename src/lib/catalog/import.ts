@@ -15,7 +15,7 @@ import type { Db } from "../db/client";
 import { categories, collections, inventory, productVariants, products } from "../db/schema";
 import { type Actor, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
-import { slugify } from "./service";
+import { normalizeSku, slugify } from "./service";
 
 const MATERIALS = ["yg", "wg", "vm", "ss"] as const;
 
@@ -71,7 +71,7 @@ export function validateImport(csvText: string): ImportPreview {
     const r = table[i]!;
     const line = i + 1;
     const get = (name: string) => (col(name) >= 0 ? (r[col(name)] ?? "").trim() : "");
-    const productName = get("product name"), sku = get("sku").toUpperCase(), category = get("category");
+    const productName = get("product name"), sku = normalizeSku(get("sku")), category = get("category");
     if (!productName) errors.push({ line, field: "Product Name", message: "Required." });
     if (!sku) errors.push({ line, field: "SKU", message: "Required." });
     else if (!/^[A-Z0-9-]{3,40}$/.test(sku)) errors.push({ line, field: "SKU", message: "Must be 3–40 letters, numbers or dashes." });
