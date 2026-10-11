@@ -19,8 +19,13 @@ export default async function StaffLogin({ searchParams }: { searchParams: Promi
   const dev = devAuthEnabled();
   const staff = dev ? await listStaff(db) : [];
   return (
-    <main className="admin grid min-h-dvh place-items-center px-4 py-10">
-      <div className="w-full max-w-sm">
+    <main className="admin relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
+      <div className="login-bg" aria-hidden="true">
+        <span className="login-blob login-blob-1" />
+        <span className="login-blob login-blob-2" />
+        <span className="login-blob login-blob-3" />
+      </div>
+      <div className="relative w-full max-w-sm admin-rise">
         <p className="mb-6 text-center font-display text-[20px] tracking-[0.32em]">SAURI</p>
         <div className="rounded-lg border border-line bg-surface p-6">
           <h1 className="text-[17px] font-semibold">Staff sign-in</h1>

@@ -113,6 +113,17 @@
 .admin-toast-in { animation: admin-toast-in .25s cubic-bezier(.22,.61,.36,1) both; }
 @media (prefers-reduced-motion: reduce) { .admin-rise, .admin-toast-in { animation: none; } }
 
+/* Staff sign-in: slow-drifting colour blobs behind the card. Decorative only; pointer-events are off. */
+.login-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.login-blob { position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .55; will-change: transform; }
+.login-blob-1 { width: 38rem; height: 38rem; top: -12rem; left: -10rem; background: #cfe0d8; animation: login-float-a 22s ease-in-out infinite alternate; }
+.login-blob-2 { width: 32rem; height: 32rem; bottom: -12rem; right: -8rem; background: #eadfc6; animation: login-float-b 26s ease-in-out infinite alternate; }
+.login-blob-3 { width: 24rem; height: 24rem; top: 35%; left: 55%; background: #dfe8e3; animation: login-float-c 30s ease-in-out infinite alternate; }
+@keyframes login-float-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(14rem, 9rem) scale(1.15); } }
+@keyframes login-float-b { from { transform: translate(0, 0) scale(1); } to { transform: translate(-12rem, -8rem) scale(1.2); } }
+@keyframes login-float-c { from { transform: translate(0, 0) scale(.9); } to { transform: translate(-9rem, 6rem) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .login-blob { animation: none; } }
+
 /* Recharts: quiet axes */
 .admin .recharts-cartesian-axis-tick-value { fill: var(--color-subtle); font-size: 11px; }
 .admin .recharts-cartesian-grid line { stroke: var(--color-chart-grid); }
