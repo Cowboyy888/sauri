@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { useRef, useState } from "react";
 import { cn } from "@/components/ui/cn";
 import type { CategorySummary, MaterialOption } from "@/lib/storefront/catalog";
@@ -37,14 +36,10 @@ export function MegaMenu({ categories, materials }: { categories: CategorySummar
         id="mega-menu-jewelry"
         hidden={!open}
         className={cn(
-          "absolute left-1/2 top-full z-40 mt-5 w-[min(880px,90vw)] -translate-x-1/2 border border-ink/10 bg-warm-white shadow-[0_24px_60px_rgba(35,33,30,.12)]",
+          "absolute left-1/2 top-full z-40 mt-5 w-[min(640px,90vw)] -translate-x-1/2 border border-ink/10 bg-warm-white shadow-[0_24px_60px_rgba(35,33,30,.12)]",
         )}
       >
-        <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-8 p-8">
-          <div className="relative aspect-[4/5] overflow-hidden bg-beige-soft">
-            <Image src="/products/aurora-signet-ring-yg-front.svg" alt="A hand wearing layered gold rings" fill sizes="220px" className="object-cover" />
-            <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/60 to-transparent p-4 font-sans text-xs uppercase tracking-widest text-warm-white">The Everyday Edit</p>
-          </div>
+        <div className="grid grid-cols-3 gap-8 p-8">
           <nav aria-label="Shop jewelry">
             <p className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Shop Jewelry</p>
             <ul className="mt-3 space-y-2.5">
