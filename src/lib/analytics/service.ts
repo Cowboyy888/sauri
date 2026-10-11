@@ -15,6 +15,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import { STORE } from "../config";
+import { materialName } from "../format";
 import { stockStatus, type StockStatus } from "../inventory/service";
 
 export type Range = { from: Date; to: Date }; // `to` is exclusive
@@ -141,7 +142,6 @@ const GROUP = {
   material: [sql.raw(`i.variant_snapshot->>'material'`), sql.raw(`i.variant_snapshot->>'material'`)],
   sku: [sql.raw(`i.sku_snapshot`), sql.raw(`max(i.product_name_snapshot || ' / ' || (i.variant_snapshot->>'label'))`)],
 } as const;
-const MATERIAL: Record<string, string> = { yg: "14K Yellow Gold", wg: "14K White Gold", vm: "18K Gold Vermeil", ss: "Sterling Silver" };
 
 function withShare(list: Omit<GroupRow, "shareOfRevenuePct" | "averageOrderValueCents">[]): GroupRow[] {
   const tot = list.reduce((a, x) => a + x.netRevenueCents, 0);
@@ -158,7 +158,7 @@ export async function getSalesBy(db: DbOrTx, r: Range, by: keyof typeof GROUP, o
     where ${RECOGNIZED} and ${NOT_REFUNDED} and ${inRange(r)}
       ${opts.categorySlug ? sql`and c.slug = ${opts.categorySlug}` : sql``} ${opts.productId ? sql`and i.product_id = ${opts.productId}` : sql``}
     group by ${key} order by rev desc`);
-  return withShare(res.map((x) => ({ key: x.key!, label: by === "material" ? MATERIAL[x.label!] ?? x.label! : x.label!, netRevenueCents: n(x.rev), cogsCents: n(x.cost), grossProfitCents: n(x.gp), grossMarginPct: pctOf(n(x.gp), n(x.rev)), units: n(x.units), orders: n(x.orders) })));
+  return withShare(res.map((x) => ({ key: x.key!, label: by === "material" ? materialName(x.label!) : x.label!, netRevenueCents: n(x.rev), cogsCents: n(x.cost), grossProfitCents: n(x.gp), grossMarginPct: pctOf(n(x.gp), n(x.rev)), units: n(x.units), orders: n(x.orders) })));
 }
 
 export async function getSalesByChannel(db: DbOrTx, r: Range): Promise<GroupRow[]> {

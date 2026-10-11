@@ -11,7 +11,7 @@ import pg from "pg";
 
 const KEEP = new Set([
   "roles", "users", "categories", "sales_channels", "shipping_methods", "inventory_locations",
-  "settings", "loyalty_tiers", "expense_categories", "customer_tags",
+  "settings", "materials", "loyalty_tiers", "expense_categories", "customer_tags",
 ]);
 
 async function main() {

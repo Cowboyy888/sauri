@@ -1,6 +1,6 @@
 "use client";
 import { formatMoney } from "@/lib/money";
-import { MATERIAL_NAME } from "@/lib/format";
+import { materialName } from "@/lib/format";
 import type { Facets } from "@/lib/storefront/catalog";
 
 export type FilterState = { material: string[]; gemstone: string[]; size: string[]; priceMin: number | null; priceMax: number | null; inStockOnly: boolean };
@@ -19,7 +19,7 @@ export function FilterPanel({ facets, value, onChange }: { facets: Facets; value
             {facets.materials.map((m) => (
               <label key={m} className="flex items-center gap-2.5 font-sans text-sm text-ink/80">
                 <input type="checkbox" checked={value.material.includes(m)} onChange={() => onChange({ ...value, material: toggle(value.material, m) })} className="size-4 accent-ink" />
-                {MATERIAL_NAME[m] ?? m}
+                {materialName(m)}
               </label>
             ))}
           </div>

@@ -11,6 +11,8 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { AddStaffForm, StaffRow } from "@/components/admin/owner-forms";
 import { CompanyDetailsForm } from "@/components/admin/purchasing-forms";
 import { getStoreSettings } from "@/lib/admin/store-settings";
+import { listCategoriesWithCounts, listMaterialsWithCounts } from "@/lib/catalog/taxonomy";
+import { CategoriesManager, MaterialsManager } from "@/components/admin/catalog-vocab-forms";
 
 export const metadata = { title: "Settings" };
 const ROLES = ["OWNER", "ADMIN", "SALES", "INVENTORY", "VIEWER"] as const;
@@ -20,6 +22,8 @@ export default async function SettingsPage() {
   if (!g.ok) return <AccessDenied role={g.staff.role} permission={g.permission} />;
   const staff = g.can("staff:read") ? await listStaff(getDb()) : [];
   const company = await getStoreSettings(getDb());
+  const [cats, mats] = await Promise.all([listCategoriesWithCounts(getDb()), listMaterialsWithCounts(getDb())]);
+  const canEditCatalog = g.can("settings:write");
   return (
     <div className="grid grid-cols-1 gap-4">
       <PageHeader title="Settings" actions={g.can("audit:read") && <Link href="/admin/audit-log" className="text-[13px] font-medium text-accent hover:underline">Audit log</Link>} />
@@ -35,6 +39,11 @@ export default async function SettingsPage() {
         <div className="relative overflow-x-auto"><table className="w-full text-[13px]"><caption className="sr-only">Permissions</caption>
           <thead><tr className="border-b border-line text-xs text-muted"><th className="py-2 pl-4 text-left font-medium">Area</th>{ROLES.map((r) => <th key={r} className="px-3 text-center font-medium">{r[0] + r.slice(1).toLowerCase()}</th>)}</tr></thead>
           <tbody>{AREAS.map((a) => <tr key={a} className="border-b border-line-soft last:border-0"><td className="py-1.5 pl-4 capitalize">{a}</td>{ROLES.map((r) => <td key={r} className="px-3 text-center">{PERMISSIONS[r].has(`${a}:write`) ? "Edit" : PERMISSIONS[r].has(`${a}:read`) ? "View" : <span className="text-subtle">—</span>}</td>)}</tr>)}</tbody></table></div>
+      </Card>
+      <Card>
+        <CardHeader title="Categories and materials" description="The choices offered when creating products and variants. One that is still in use can’t be deleted." />
+        <CategoriesManager rows={cats} readOnly={!canEditCatalog} />
+        <MaterialsManager rows={mats} readOnly={!canEditCatalog} />
       </Card>
       <Card>
         <CardHeader title="Shipping & returns" description="Shipping methods, delivery estimates, and the return policy customers see (brief §15, §26)." />

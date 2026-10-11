@@ -19,7 +19,7 @@ const filesOf = (fd: FormData, k: string) => fd.getAll(k).filter((f): f is File 
 
 
 type Opt = { id: string; name: string };
-const MATERIALS = [["yg", "14K Yellow Gold"], ["wg", "14K White Gold"], ["vm", "18K Gold Vermeil"], ["ss", "Sterling Silver"]] as const;
+type MaterialOpt = { code: string; name: string };
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 const Err = ({ e }: { e: string | null }) => (e ? <p role="alert" className="rounded-md bg-[#f8e9e6] px-3 py-2 text-[13px] text-neg">{e}</p> : null);
 const Check = ({ name, label, defaultChecked, disabled }: { name: string; label: string; defaultChecked?: boolean; disabled?: boolean }) => (
@@ -27,7 +27,7 @@ const Check = ({ name, label, defaultChecked, disabled }: { name: string; label:
 );
 
 /* ---------------- create (§25) ---------------- */
-export function NewProductForm({ categories, collections }: { categories: Opt[]; collections: Opt[] }) {
+export function NewProductForm({ categories, collections, materials }: { categories: Opt[]; collections: Opt[]; materials: MaterialOpt[] }) {
   const router = useRouter();
   const [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
   const [name, setName] = useState(""), [slug, setSlug] = useState(""), [slugTouched, setSlugTouched] = useState(false);
@@ -62,7 +62,7 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
         <section className="grid grid-cols-1 gap-3.5 rounded-lg border border-line bg-surface p-4">
           <div><h2 className="text-[14px] font-semibold">First variant</h2><p className="text-xs text-muted">The SKU is generated automatically. Add more sizes, metals or stones on the Variants tab after saving.</p></div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Material"><Select name="material" defaultValue="yg">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
+            <Field label="Material"><Select name="material" defaultValue={materials[0]?.code ?? ""} required>{materials.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
             <Field label="Size"><Input name="size" placeholder="e.g. 6 or 18&quot;" /></Field>
             <Field label="Color"><Input name="color" placeholder="Optional" /></Field>
             <Field label="Gemstone"><Input name="gemstone" placeholder="Optional" /></Field>
@@ -177,7 +177,7 @@ export function VariantRowEditor({ v, readOnly }: { v: V; readOnly: boolean }) {
   );
 }
 
-export function AddVariantForm({ productId }: { productId: string; skuPrefix?: string }) {
+export function AddVariantForm({ productId, materials }: { productId: string; materials: MaterialOpt[]; skuPrefix?: string }) {
   const [open, setOpen] = useState(false), [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); setErr(null); }}>
@@ -188,7 +188,7 @@ export function AddVariantForm({ productId }: { productId: string; skuPrefix?: s
           if (r.ok) { setOpen(false); toast(r.message ?? "Variant added"); } else setErr(r.error);
         })}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Material"><Select name="material">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
+            <Field label="Material"><Select name="material" required>{materials.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
             <Field label="Size"><Input name="size" /></Field><Field label="Gemstone"><Input name="gemstone" /></Field>
             <Field label="Color"><Input name="color" /></Field><Field label="Style"><Input name="style" /></Field>
             <Field label="Barcode"><Input name="barcode" /></Field>

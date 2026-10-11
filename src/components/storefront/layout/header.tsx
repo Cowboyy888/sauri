@@ -6,11 +6,11 @@ import { MobileNav } from "./mobile-nav";
 import { SearchOverlay } from "./search-overlay";
 import { useCart } from "@/components/storefront/cart/cart-provider";
 import { BRAND } from "@/lib/storefront/brand";
-import type { CategorySummary } from "@/lib/storefront/catalog";
+import type { CategorySummary, MaterialOption } from "@/lib/storefront/catalog";
 
 const CATEGORY_LABELS: Record<string, string> = { rings: "Rings", earrings: "Earrings", necklaces: "Necklaces", bracelets: "Bracelets" };
 
-export function Header({ categories }: { categories: CategorySummary[] }) {
+export function Header({ categories, materials }: { categories: CategorySummary[]; materials: MaterialOption[] }) {
   const { count, open } = useCart();
   const ordered = [...categories].sort((a, b) => (CATEGORY_LABELS[a.slug] ?? a.name).localeCompare(CATEGORY_LABELS[b.slug] ?? b.name));
 
@@ -25,7 +25,7 @@ export function Header({ categories }: { categories: CategorySummary[] }) {
         </div>
         <nav className="relative hidden items-center gap-7 lg:flex" aria-label="Primary">
           <Link href="/collections/new-arrivals" className="font-sans text-[13px] uppercase tracking-[0.14em] text-ink/80 hover:text-ink">New</Link>
-          <MegaMenu categories={ordered} />
+          <MegaMenu categories={ordered} materials={materials} />
           {ordered.map((c) => (
             <Link key={c.slug} href={`/collections/${c.slug}`} className="font-sans text-[13px] uppercase tracking-[0.14em] text-ink/80 hover:text-ink">{CATEGORY_LABELS[c.slug] ?? c.name}</Link>
           ))}

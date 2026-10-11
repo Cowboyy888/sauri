@@ -165,6 +165,14 @@ export const categories = pgTable("categories", {
   position: integer("position").notNull().default(0),
 });
 
+/** Controlled vocabulary for product_variants.material. `code` is what variants store (and the storefront filters on). */
+export const materials = pgTable("materials", {
+  id: id(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  position: integer("position").notNull().default(0),
+});
+
 export const collections = pgTable("collections", {
   id: id(),
   slug: text("slug").notNull().unique(),
@@ -216,7 +224,7 @@ export const productVariants = pgTable("product_variants", {
   productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   sku: text("sku").notNull().unique(),
   barcode: text("barcode"),
-  material: text("material").notNull(), // yg | wg | vm | ss
+  material: text("material").notNull(), // materials.code (seeded: yg | wg | vm | ss)
   color: text("color"),
   size: text("size"),
   gemstone: text("gemstone"),

@@ -7,7 +7,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
-import { categories, collections, inventory, productImages, productVariants, products, reviews } from "../db/schema";
+import { categories, collections, inventory, materials, productImages, productVariants, products, reviews } from "../db/schema";
 import { availableStock, stockStatus, type StockStatus } from "../inventory/service";
 
 export type ImageRef = { url: string; alt: string };
@@ -147,7 +147,7 @@ export async function getFacets(db: DbOrTx, base: TaxonomyFilters): Promise<Face
     .where(and(...conds)!);
 
   const MATERIAL_ORDER = ["yg", "wg", "vm", "ss"];
-  const materials = [...new Set(rows.map((r) => r.material))].sort((a, b) => MATERIAL_ORDER.indexOf(a) - MATERIAL_ORDER.indexOf(b));
+  const materials = [...new Set(rows.map((r) => r.material))].sort((a, b) => (MATERIAL_ORDER.indexOf(a) + 1 || 99) - (MATERIAL_ORDER.indexOf(b) + 1 || 99));
   const gemstones = [...new Set(rows.map((r) => r.gemstone).filter((g): g is string => !!g))].sort();
   const sizes = [...new Set(rows.map((r) => r.size).filter((s): s is string => !!s))].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
   const prices = rows.map((r) => r.price);
@@ -198,6 +198,12 @@ export async function getVariantImages(db: DbOrTx, variantIds: string[]): Promis
 }
 
 /* ------------------------------------------------------------- taxonomy */
+export type MaterialOption = { slug: string; name: string };
+export async function getMaterialOptions(db: DbOrTx): Promise<MaterialOption[]> {
+  const rows = await db.select({ slug: materials.code, name: materials.name }).from(materials).orderBy(asc(materials.position));
+  return rows;
+}
+
 export type CategorySummary = { slug: string; name: string; count: number };
 export async function getCategories(db: DbOrTx): Promise<CategorySummary[]> {
   const rows = await db.select({

@@ -4,13 +4,12 @@
  */
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { categories, inventory, inventoryMovements, orderItems, productImages, productPriceHistory, productVariants, products, settings, users } from "../db/schema";
+import { categories, materials, inventory, inventoryMovements, orderItems, productImages, productPriceHistory, productVariants, products, settings, users } from "../db/schema";
 import { NotFoundError, ValidationError } from "../errors";
 import { type Actor, type Role, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
 
 export const slugify = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-const MATERIALS = ["yg", "wg", "vm", "ss"] as const;
 
 function checkPrices(v: { sellingPriceCents?: number; costPriceCents?: number; compareAtPriceCents?: number | null }) {
   if (v.sellingPriceCents != null && !(Number.isInteger(v.sellingPriceCents) && v.sellingPriceCents > 0)) throw new ValidationError("Selling price must be above zero.");
@@ -35,9 +34,17 @@ export function normalizeSku(raw: string): string {
   return raw.trim().toUpperCase().replace(/[\s_./\\]+/g, "-").replace(/[^A-Z0-9-]/g, "").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
 }
 
+/** Short SKU token for a material code: short codes (yg, ss) as-is, longer slugs by initials (14k-rose-gold → RG). */
+const materialSkuPart = (code: string) => {
+  if (code.length <= 4) return code;
+  const words = code.split("-").filter((w) => w && !/^\d+k?$/.test(w));
+  const initials = words.map((w) => w[0]).join("");
+  return initials.length >= 2 ? initials : (words.join("") || code).slice(0, 3);
+};
+
 /** PREFIX-CODE-MATERIAL[-SIZE][-GEM], e.g. RNG-NEW-YG-6 (same shape as the seeded SKUs); a numeric suffix is added until unique. */
 async function generateSku(tx: Pick<Db, "select">, parts: { prefix: string; code: string; material: string; size?: string | null; gemstone?: string | null }) {
-  const base = normalizeSku([parts.prefix, parts.code, parts.material, parts.size?.replace(/"/g, "IN"), parts.gemstone?.slice(0, 2)].filter(Boolean).join("-")).slice(0, 36);
+  const base = normalizeSku([parts.prefix, parts.code, materialSkuPart(parts.material), parts.size?.replace(/"/g, "IN"), parts.gemstone?.slice(0, 2)].filter(Boolean).join("-")).slice(0, 36);
   let sku = base;
   for (let i = 2; (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, sku))).length; i++) sku = `${base}-${i}`;
   return sku;
@@ -51,7 +58,6 @@ export async function createProduct(db: Db, actor: Actor, input: NewProductInput
   if (!slug) throw new ValidationError("Enter a valid URL slug.");
   const typedSku = normalizeSku(input.sku ?? "");
   if (typedSku && !/^[A-Z0-9-]{3,40}$/.test(typedSku)) throw new ValidationError("SKU must be 3–40 characters long, using letters, numbers or dashes (e.g. RNG-NEW-YG-6). Leave it blank to auto-generate.");
-  if (!MATERIALS.includes(input.material as (typeof MATERIALS)[number])) throw new ValidationError("Choose a material.");
   checkPrices(input);
   input.imageUrls?.forEach(checkImageUrl);
   return db.transaction(async (tx) => {
@@ -59,6 +65,7 @@ export async function createProduct(db: Db, actor: Actor, input: NewProductInput
     if (typedSku && (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, typedSku))).length) throw new ValidationError(`SKU ${typedSku} is already in use.`);
     const [cat] = await tx.select().from(categories).where(eq(categories.id, input.categoryId));
     if (!cat) throw new ValidationError("Choose a category.");
+    if (!(await tx.select({ id: materials.id }).from(materials).where(eq(materials.code, input.material))).length) throw new ValidationError("Choose a material.");
     // Product code (the middle of generated SKUs): letters from the name, made unique.
     const base = (name.replace(/[^A-Za-z]/g, "").slice(0, 3) || "PRD").toUpperCase();
     let code = base;
@@ -133,9 +140,9 @@ export async function addVariant(db: Db, actor: Actor, productId: string, v: { s
   assertCan(actor, "products:write");
   const typedSku = normalizeSku(v.sku ?? "");
   if (typedSku && !/^[A-Z0-9-]{3,40}$/.test(typedSku)) throw new ValidationError("SKU must be 3–40 characters long, using letters, numbers or dashes (e.g. RNG-NEW-YG-6). Leave it blank to auto-generate.");
-  if (!MATERIALS.includes(v.material as (typeof MATERIALS)[number])) throw new ValidationError("Choose a material.");
   checkPrices(v);
   return db.transaction(async (tx) => {
+    if (!(await tx.select({ id: materials.id }).from(materials).where(eq(materials.code, v.material))).length) throw new ValidationError("Choose a material.");
     const [prod] = await tx.select({ code: products.code, prefix: categories.skuPrefix }).from(products).innerJoin(categories, eq(categories.id, products.categoryId)).where(eq(products.id, productId));
     if (!prod) throw new NotFoundError("Product not found.");
     if (typedSku && (await tx.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.sku, typedSku))).length) throw new ValidationError(`SKU ${typedSku} is already in use.`);

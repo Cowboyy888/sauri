@@ -33,5 +33,8 @@ export function bucketLabel(b: string, unit: string, long = false) {
   if (unit === "week") return long ? `Week of ${f({ month: "short", day: "numeric", year: "numeric" })}` : f({ month: "short", day: "numeric" });
   return long ? f({ weekday: "short", month: "short", day: "numeric", year: "numeric" }) : f({ month: "short", day: "numeric" });
 }
-export const MATERIAL_NAME: Record<string, string> = { yg: "14K Yellow Gold", wg: "14K White Gold", vm: "18K Gold Vermeil", ss: "Sterling Silver" };
+const SEEDED_MATERIAL_NAME: Record<string, string> = { yg: "14K Yellow Gold", wg: "14K White Gold", vm: "18K Gold Vermeil", ss: "Sterling Silver" };
+/** Display name for a material code. Materials added in Settings use their slugified name as the code
+ *  ("14k-rose-gold"), so unknown codes are turned back into words ("14K Rose Gold"). */
+export const materialName = (code: string) => SEEDED_MATERIAL_NAME[code] ?? code.split("-").map((w) => (/^\d+k$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
 export const titleCase = (s: string) => s.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());

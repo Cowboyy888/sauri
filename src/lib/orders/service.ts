@@ -14,6 +14,7 @@ import { BusinessError, InsufficientStockError, NotFoundError, ValidationError }
 import { type Actor, STOREFRONT_ACTOR, assertCan } from "../auth/permissions";
 import { audit, emit, notify } from "../audit";
 import { formatMoney } from "../money";
+import { materialName } from "../format";
 import { computeTotals, marginPct, type PricedLine, type ResolvedShippingMethod, type Totals } from "./pricing";
 import { consumeDiscount, validateDiscount, type DiscountRow } from "../discounts/service";
 import { applyMovement, lockInventory, release, reserve } from "../inventory/service";
@@ -30,10 +31,9 @@ export type QuoteInput = { lines: CartLine[]; discountCode?: string | null; chan
 type LoadedLine = PricedLine & { variantId: string; sku: string; productName: string; snapshot: VariantSnapshot; available: number; personalization?: CartLine["personalization"] };
 export type Quote = Totals & { lines: LoadedLine[]; discount: DiscountRow | null; discountError: string | null; problems: string[] };
 
-const MATERIAL: Record<string, string> = { yg: "14K Yellow Gold", wg: "14K White Gold", vm: "18K Gold Vermeil", ss: "Sterling Silver" };
 /** "14K Yellow Gold / Size 6". Color is shown only when the material name does not already say it. */
 export const variantLabel = (v: { material: string; size: string | null; gemstone: string | null; color?: string | null }) => {
-  const material = MATERIAL[v.material] ?? v.material;
+  const material = materialName(v.material);
   const color = v.color && !material.includes(v.color) ? v.color : null;
   return [material, color, v.gemstone, v.size && (/^\d+$/.test(v.size) ? `Size ${v.size}` : v.size)].filter(Boolean).join(" / ");
 };

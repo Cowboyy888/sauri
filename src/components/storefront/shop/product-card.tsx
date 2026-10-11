@@ -2,14 +2,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/components/ui/cn";
 import type { ProductCard as ProductCardData } from "@/lib/storefront/catalog";
-import { MATERIAL_NAME } from "@/lib/format";
+import { materialName } from "@/lib/format";
 import { Price } from "./price";
 import { ProductBadge, StockLabel } from "./badge";
 import { WishlistButton } from "./wishlist-button";
 import { QuickAddButton } from "./quick-add-button";
 
 export function ProductCard({ product, className }: { product: ProductCardData; className?: string }) {
-  const materialLabel = product.materials.length === 1 ? (MATERIAL_NAME[product.materials[0]!] ?? product.materials[0]) : `${product.materials.length} metals`;
+  const materialLabel = product.materials.length === 1 ? materialName(product.materials[0]!) : `${product.materials.length} metals`;
   const badge = product.badge ?? (product.stockStatus === "LOW_STOCK" ? "Low stock" : product.newArrival ? "New" : product.bestSeller ? "Best seller" : null);
 
   return (

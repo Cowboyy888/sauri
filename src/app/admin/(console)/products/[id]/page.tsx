@@ -21,7 +21,7 @@ import { Thumb } from "@/components/admin/thumb";
 import { AddVariantForm, ImageManager, ProductGeneralForm, ProductMenu, ProductSeoForm, VariantRowEditor } from "@/components/admin/product-forms";
 import { AdjustButton, RestockButton } from "@/components/admin/stock-actions";
 import { AddProductSupplierButton, RemoveSupplierProductButton } from "@/components/admin/purchasing-forms";
-import { suppliers as suppliersTable } from "@/lib/db/schema";
+import { materials as materialsTable, suppliers as suppliersTable } from "@/lib/db/schema";
 import { MiniTrend } from "@/components/admin/charts";
 import { KPICard } from "@/components/admin/kpi-card";
 import { ReviewActions } from "@/components/admin/review-actions";
@@ -42,6 +42,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const ro = !g.can("products:write"), canStock = g.can("inventory:write");
   const stock = variants.reduce((a, v) => a + v.availableStock, 0);
   const cat = categories.find((c) => c.id === p.categoryId);
+  const materialOpts = await db.select({ code: materialsTable.code, name: materialsTable.name }).from(materialsTable).orderBy(materialsTable.position);
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -55,7 +56,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
       {tab === "variants" && (
         <Card>
-          <CardHeader title="Variants" description="Price and cost changes are recorded in the audit log. Stock is changed on the Inventory tab." actions={!ro && <AddVariantForm productId={p.id} skuPrefix={`${cat?.skuPrefix}-${p.code}`} />} />
+          <CardHeader title="Variants" description="Price and cost changes are recorded in the audit log. Stock is changed on the Inventory tab." actions={!ro && <AddVariantForm productId={p.id} materials={materialOpts} skuPrefix={`${cat?.skuPrefix}-${p.code}`} />} />
           <div className="relative overflow-x-auto"><table className="w-full text-[13px]"><caption className="sr-only">Variants</caption>
             <thead><tr className="border-b border-line text-left text-xs text-muted"><th className="py-2 pl-4 pr-3 font-medium">Variant</th><th className="px-2 font-medium">Price (USD)</th><th className="px-2 font-medium">Cost (USD)</th><th className="hidden px-2 text-right font-medium md:table-cell">Margin</th><th className="hidden px-2 text-right font-medium sm:table-cell">Available</th><th className="hidden px-2 font-medium md:table-cell">Status</th><th className="px-2 pr-4" /></tr></thead>
             <tbody>{variants.map((v) => <VariantRowEditor key={v.id} v={v} readOnly={ro} />)}</tbody></table></div>

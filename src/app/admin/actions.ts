@@ -35,6 +35,8 @@ import { receivePurchaseOrder, type ReceiveLine } from "@/lib/purchasing/receivi
 import { startStocktake, recordCount, completeStocktake, cancelStocktake, setStocktakeSettings } from "@/lib/purchasing/stocktake";
 import { bulkSetProductStatus, bulkSetCategory, bulkSetCollection, bulkSetReorderLevel } from "@/lib/catalog/service";
 import { applyProductImport, validateImport, type ImportPreview } from "@/lib/catalog/import";
+import { createCategory, createMaterial, deleteCategory, deleteMaterial } from "@/lib/catalog/taxonomy";
+import { materials as materialsTable } from "@/lib/db/schema";
 import { setStoreSettings } from "@/lib/admin/store-settings";
 import { setTargetStockLevel } from "@/lib/admin/purchasing";
 import { createExpenseCategory, setExpenseCategoryActive } from "@/lib/finance/expense-categories";
@@ -261,7 +263,7 @@ const NewProduct = z.object({
   name: z.string().trim().min(1, "Enter a product name.").max(120), slug: z.string().trim().max(80).optional(), shortDescription: z.string().trim().max(200).optional(), description: z.string().trim().max(5000).optional(),
   categoryId: uuid, collectionId: z.union([z.literal(""), uuid]).optional(), status: z.enum(["draft", "active", "archived"]),
   featured: z.boolean().optional(), bestSeller: z.boolean().optional(), newArrival: z.boolean().optional(),
-  material: z.enum(["yg", "wg", "vm", "ss"]), color: z.string().trim().max(40).optional(), size: z.string().trim().max(20).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(),
+  material: z.string().trim().min(1, "Choose a material.").max(40), color: z.string().trim().max(40).optional(), size: z.string().trim().max(20).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(),
   sku: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(),
   costPrice: dollars("Cost price"), sellingPrice: dollars("Selling price"), compareAtPrice: optDollars("Compare-at price"),
   weightGrams: z.union([z.literal(""), z.coerce.number().min(0).max(10_000)]).optional(), reorderLevel: z.coerce.number().int().min(0).max(10_000).optional(),
@@ -295,7 +297,7 @@ export async function updateVariantAction(input: z.input<typeof VPatch>) {
     await updateVariant(getDb(), actor, v.variantId, { sellingPriceCents: v.sellingPrice, costPriceCents: v.costPrice, compareAtPriceCents: v.compareAtPrice, barcode: v.barcode === undefined ? undefined : v.barcode || null, status: v.status });
   }, "Variant saved");
 }
-const NewVariant = z.object({ productId: uuid, sku: z.string().trim().max(40).optional(), material: z.enum(["yg", "wg", "vm", "ss"]), size: z.string().trim().max(20).optional(), color: z.string().trim().max(40).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(), sellingPrice: dollars("Selling price"), costPrice: dollars("Cost price"), compareAtPrice: optDollars("Compare-at price"), reorderLevel: z.coerce.number().int().min(0).optional() });
+const NewVariant = z.object({ productId: uuid, sku: z.string().trim().max(40).optional(), material: z.string().trim().min(1, "Choose a material.").max(40), size: z.string().trim().max(20).optional(), color: z.string().trim().max(40).optional(), gemstone: z.string().trim().max(40).optional(), style: z.string().trim().max(40).optional(), barcode: z.string().trim().max(40).optional(), sellingPrice: dollars("Selling price"), costPrice: dollars("Cost price"), compareAtPrice: optDollars("Compare-at price"), reorderLevel: z.coerce.number().int().min(0).optional() });
 export async function addVariantAction(input: z.input<typeof NewVariant>) {
   return act("products:write", async (actor) => { const v = NewVariant.parse(input); await addVariant(getDb(), actor, v.productId, { ...v, sellingPriceCents: v.sellingPrice, costPriceCents: v.costPrice, compareAtPriceCents: v.compareAtPrice }); }, "Variant added. Restock it to start selling.");
 }
@@ -455,7 +457,7 @@ export async function bulkSetReorderLevelAction(ids: string[], level: number) {
   return act("products:write", async (actor) => { await bulkSetReorderLevel(getDb(), actor, ids.map((i) => uuid.parse(i)), z.coerce.number().int().min(0).parse(level)); }, "Reorder level updated");
 }
 export async function validateProductImportAction(csvText: string): Promise<ActionResult<ImportPreview>> {
-  return act("products:write", async () => validateImport(csvText));
+  return act("products:write", async () => validateImport(csvText, (await getDb().select({ code: materialsTable.code }).from(materialsTable)).map((m) => m.code)));
 }
 export async function applyProductImportAction(preview: ImportPreview) {
   return act("products:write", async (actor) => applyProductImport(getDb(), actor, preview));
@@ -565,4 +567,20 @@ export async function devSignInAction(email: string, next?: string) {
   if (!devAuthEnabled()) throw new Error("Not available.");
   (await cookies()).set(DEV_COOKIE, z.string().email().parse(email), { httpOnly: true, sameSite: "lax", path: "/" });
   redirect(next && next.startsWith("/admin") ? next : "/admin/dashboard");
+}
+
+/* ---------------- categories & materials (Settings) ---------------- */
+const NewCategory = z.object({ name: z.string().trim().min(1, "Enter a category name.").max(60), skuPrefix: z.string().trim().max(4).optional() });
+export async function createCategoryAction(input: z.input<typeof NewCategory>) {
+  return act("settings:write", async (actor) => { const v = NewCategory.parse(input); await createCategory(getDb(), actor, v); }, "Category added");
+}
+export async function deleteCategoryAction(id: string) {
+  return act("settings:write", async (actor) => { await deleteCategory(getDb(), actor, uuid.parse(id)); }, "Category deleted");
+}
+const NewMaterial = z.object({ name: z.string().trim().min(1, "Enter a material name.").max(60) });
+export async function createMaterialAction(input: z.input<typeof NewMaterial>) {
+  return act("settings:write", async (actor) => { const v = NewMaterial.parse(input); await createMaterial(getDb(), actor, v); }, "Material added");
+}
+export async function deleteMaterialAction(id: string) {
+  return act("settings:write", async (actor) => { await deleteMaterial(getDb(), actor, uuid.parse(id)); }, "Material deleted");
 }

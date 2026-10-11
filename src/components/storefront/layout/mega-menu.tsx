@@ -3,14 +3,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { cn } from "@/components/ui/cn";
-import type { CategorySummary } from "@/lib/storefront/catalog";
+import type { CategorySummary, MaterialOption } from "@/lib/storefront/catalog";
 
-const MATERIALS = [
-  { slug: "yg", name: "14K Yellow Gold" },
-  { slug: "wg", name: "14K White Gold" },
-  { slug: "vm", name: "18K Gold Vermeil" },
-  { slug: "ss", name: "Sterling Silver" },
-];
 const OCCASIONS = [
   { slug: "everyday", name: "Everyday" },
   { slug: "wedding", name: "Wedding" },
@@ -18,7 +12,7 @@ const OCCASIONS = [
   { slug: "statement", name: "Statement" },
 ];
 
-export function MegaMenu({ categories }: { categories: CategorySummary[] }) {
+export function MegaMenu({ categories, materials }: { categories: CategorySummary[]; materials: MaterialOption[] }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,7 +54,7 @@ export function MegaMenu({ categories }: { categories: CategorySummary[] }) {
           <nav aria-label="Shop by material">
             <p className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Shop by Material</p>
             <ul className="mt-3 space-y-2.5">
-              {MATERIALS.map((m) => (
+              {materials.map((m) => (
                 <li key={m.slug}><Link href={`/collections/all-jewelry?material=${m.slug}`} className="font-sans text-sm text-ink/80 hover:text-ink">{m.name}</Link></li>
               ))}
             </ul>

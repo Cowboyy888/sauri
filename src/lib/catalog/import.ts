@@ -17,7 +17,7 @@ import { type Actor, assertCan } from "../auth/permissions";
 import { audit } from "../audit";
 import { normalizeSku, slugify } from "./service";
 
-const MATERIALS = ["yg", "wg", "vm", "ss"] as const;
+const DEFAULT_MATERIALS: readonly string[] = ["yg", "wg", "vm", "ss"];
 
 export type ImportRow = {
   line: number; productName: string; sku: string; category: string; collection?: string; variant?: string;
@@ -55,7 +55,7 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
-export function validateImport(csvText: string): ImportPreview {
+export function validateImport(csvText: string, materialCodes: readonly string[] = DEFAULT_MATERIALS): ImportPreview {
   const table = parseCsv(csvText);
   if (!table.length) return { rows: [], errors: [{ line: 0, field: "file", message: "The file is empty." }], creates: 0, updates: 0 };
   const header = table[0]!.map((h) => h.trim().toLowerCase());
@@ -83,7 +83,7 @@ export function validateImport(csvText: string): ImportPreview {
     const stock = parseInt0(get("stock")); if (stock == null || stock < 0) errors.push({ line, field: "Stock", message: "Must be a whole number, zero or more." });
     const reorderLevel = parseInt0(get("reorder level")); if (reorderLevel == null || reorderLevel < 0) errors.push({ line, field: "Reorder Level", message: "Must be a whole number, zero or more." });
     const material = get("material").toLowerCase() || undefined;
-    if (material && !MATERIALS.includes(material as (typeof MATERIALS)[number])) errors.push({ line, field: "Material", message: "Must be yg, wg, vm or ss." });
+    if (material && !materialCodes.includes(material)) errors.push({ line, field: "Material", message: `Must be one of: ${materialCodes.join(", ")}.` });
     rows.push({
       line, productName, sku, category, collection: get("collection") || undefined, variant: get("variant") || undefined,
       material, color: get("color") || undefined, size: get("size") || undefined, gemstone: get("gemstone") || undefined, barcode: get("barcode") || undefined,

@@ -1,6 +1,6 @@
 /** Rows every environment needs (production included). Idempotent. */
 import type { DbOrTx } from "./client";
-import { categories, customerTags, expenseCategories, inventoryLocations, loyaltyTiers, roles, salesChannels, settings, shippingMethods } from "./schema";
+import { categories, customerTags, materials, expenseCategories, inventoryLocations, loyaltyTiers, roles, salesChannels, settings, shippingMethods } from "./schema";
 import { STORE } from "../config";
 
 export const ROLE_ROWS = [
@@ -103,10 +103,19 @@ export const EXPENSE_CATEGORY_ROWS = [
  *  actually applies (`STORE.taxRateBp`); see docs/TAX_REPORTING.md for why this doesn't replace it. */
 export const DEFAULT_TAX_SETTINGS = { enabled: STORE.taxEnabled, taxRateBp: STORE.taxRateBp, label: "Sales tax" };
 
+/** Starting set of variant materials; editable in Settings. Existing variants store the `code`. */
+export const MATERIAL_ROWS = [
+  { code: "yg", name: "14K Yellow Gold", position: 0 },
+  { code: "wg", name: "14K White Gold", position: 1 },
+  { code: "vm", name: "18K Gold Vermeil", position: 2 },
+  { code: "ss", name: "Sterling Silver", position: 3 },
+];
+
 export async function upsertReferenceData(db: DbOrTx) {
   await db.insert(roles).values(ROLE_ROWS).onConflictDoNothing();
   for (const c of CHANNEL_ROWS) await db.insert(salesChannels).values(c).onConflictDoUpdate({ target: salesChannels.code, set: c });
   await db.insert(categories).values(CATEGORY_ROWS).onConflictDoNothing();
+  await db.insert(materials).values(MATERIAL_ROWS).onConflictDoNothing();
   for (const m of SHIPPING_METHOD_ROWS) await db.insert(shippingMethods).values(m).onConflictDoUpdate({ target: shippingMethods.name, set: m });
   for (const l of INVENTORY_LOCATION_ROWS) await db.insert(inventoryLocations).values(l).onConflictDoUpdate({ target: inventoryLocations.code, set: l });
   for (const t of LOYALTY_TIER_ROWS) await db.insert(loyaltyTiers).values(t).onConflictDoUpdate({ target: loyaltyTiers.name, set: t });

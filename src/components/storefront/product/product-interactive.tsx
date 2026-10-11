@@ -7,7 +7,7 @@ import { StockLabel } from "@/components/storefront/shop/badge";
 import { WishlistButton } from "@/components/storefront/shop/wishlist-button";
 import { NotifyBackInStock } from "./notify-back-in-stock";
 import { useCart } from "@/components/storefront/cart/cart-provider";
-import { MATERIAL_NAME } from "@/lib/format";
+import { materialName } from "@/lib/format";
 import { STORE } from "@/lib/config";
 import type { ProductDetail } from "@/lib/storefront/catalog";
 
@@ -22,7 +22,7 @@ export function ProductInteractive({ product }: { product: ProductDetail }) {
   const { addLine } = useCart();
 
   const current = variants.find((v) => v.id === selectedId) ?? variants[0]!;
-  const materials = [...new Set(variants.map((v) => v.material))].sort((a, b) => MATERIAL_ORDER.indexOf(a) - MATERIAL_ORDER.indexOf(b));
+  const materials = [...new Set(variants.map((v) => v.material))].sort((a, b) => (MATERIAL_ORDER.indexOf(a) + 1 || 99) - (MATERIAL_ORDER.indexOf(b) + 1 || 99));
   const sizes = variants.some((v) => v.size) ? [...new Set(variants.map((v) => v.size).filter((s): s is string => !!s))].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b)) : [];
   const gemstones = variants.some((v) => v.gemstone) ? [...new Set(variants.map((v) => v.gemstone).filter((g): g is string => !!g))] : [];
 
@@ -52,11 +52,11 @@ export function ProductInteractive({ product }: { product: ProductDetail }) {
         <p className="mt-4 font-sans text-sm leading-relaxed text-ink/70">{product.shortDescription}</p>
 
         <fieldset className="mt-7">
-          <legend className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Material — {MATERIAL_NAME[current.material] ?? current.material}</legend>
+          <legend className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Material — {materialName(current.material)}</legend>
           <div className="mt-3 flex gap-2.5">
             {materials.map((m) => (
               <button
-                key={m} type="button" aria-label={MATERIAL_NAME[m] ?? m} aria-pressed={current.material === m}
+                key={m} type="button" aria-label={materialName(m)} aria-pressed={current.material === m}
                 onClick={() => pick("material", m)}
                 className={`size-9 rounded-full border-2 ${current.material === m ? "border-ink" : "border-transparent"}`}
                 style={{ boxShadow: `inset 0 0 0 2px var(--color-warm-white), inset 0 0 0 4px ${MATERIAL_SWATCH[m] ?? "#ccc"}` }}
