@@ -41,7 +41,7 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
       const r = await createProductAction({
         name: s(fd, "name"), slug: slugTouched ? slug : auto, shortDescription: s(fd, "shortDescription"), description: s(fd, "description"), categoryId: s(fd, "categoryId"), collectionId: s(fd, "collectionId"),
         status: s(fd, "status") as "draft", featured: fd.get("featured") === "on", bestSeller: fd.get("bestSeller") === "on", newArrival: fd.get("newArrival") === "on",
-        material: s(fd, "material") as "yg", color: s(fd, "color"), size: s(fd, "size"), gemstone: s(fd, "gemstone"), sku: s(fd, "sku"), barcode: s(fd, "barcode"),
+        material: s(fd, "material") as "yg", color: s(fd, "color"), size: s(fd, "size"), gemstone: s(fd, "gemstone"), barcode: s(fd, "barcode"),
         costPrice: s(fd, "costPrice"), sellingPrice: s(fd, "sellingPrice"), compareAtPrice: s(fd, "compareAtPrice"), weightGrams: s(fd, "weight"), reorderLevel: s(fd, "reorderLevel") || "5",
         seoTitle: s(fd, "seoTitle"), seoDescription: s(fd, "seoDescription"), tags: s(fd, "tags"), imageUrls: uploaded.join("\n"),
       } as never);
@@ -60,10 +60,9 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
           </div>
         </section>
         <section className="grid grid-cols-1 gap-3.5 rounded-lg border border-line bg-surface p-4">
-          <div><h2 className="text-[14px] font-semibold">First variant</h2><p className="text-xs text-muted">Add more sizes, metals or stones on the Variants tab after saving.</p></div>
+          <div><h2 className="text-[14px] font-semibold">First variant</h2><p className="text-xs text-muted">The SKU is generated automatically. Add more sizes, metals or stones on the Variants tab after saving.</p></div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Material"><Select name="material" defaultValue="yg">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-            <Field label="SKU" hint="Leave blank to auto-generate (category-code-material-size)."><Input name="sku" maxLength={40} placeholder="Auto-generated" style={{ textTransform: "uppercase" }} /></Field>
             <Field label="Size"><Input name="size" placeholder="e.g. 6 or 18&quot;" /></Field>
             <Field label="Color"><Input name="color" placeholder="Optional" /></Field>
             <Field label="Gemstone"><Input name="gemstone" placeholder="Optional" /></Field>
@@ -178,19 +177,18 @@ export function VariantRowEditor({ v, readOnly }: { v: V; readOnly: boolean }) {
   );
 }
 
-export function AddVariantForm({ productId, skuPrefix }: { productId: string; skuPrefix: string }) {
+export function AddVariantForm({ productId }: { productId: string; skuPrefix?: string }) {
   const [open, setOpen] = useState(false), [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); setErr(null); }}>
       <Button variant="secondary" onClick={() => setOpen(true)}>Add variant</Button>
-      <DialogContent title="Add variant" description="New variants start with 0 stock.">
+      <DialogContent title="Add variant" description="The SKU is generated automatically. New variants start with 0 stock.">
         <form className="grid grid-cols-1 gap-3" action={(fd) => start(async () => {
-          const r = await addVariantAction({ productId, sku: s(fd, "sku"), material: s(fd, "material") as "yg", size: s(fd, "size"), color: s(fd, "color"), gemstone: s(fd, "gemstone"), style: s(fd, "style"), barcode: s(fd, "barcode"), sellingPrice: s(fd, "price"), costPrice: s(fd, "cost"), compareAtPrice: s(fd, "compare"), reorderLevel: s(fd, "reorder") || "5" } as never);
+          const r = await addVariantAction({ productId, material: s(fd, "material") as "yg", size: s(fd, "size"), color: s(fd, "color"), gemstone: s(fd, "gemstone"), style: s(fd, "style"), barcode: s(fd, "barcode"), sellingPrice: s(fd, "price"), costPrice: s(fd, "cost"), compareAtPrice: s(fd, "compare"), reorderLevel: s(fd, "reorder") || "5" } as never);
           if (r.ok) { setOpen(false); toast(r.message ?? "Variant added"); } else setErr(r.error);
         })}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Material"><Select name="material">{MATERIALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Select></Field>
-            <Field label="SKU" hint="Leave blank to auto-generate."><Input name="sku" maxLength={40} placeholder={`${skuPrefix}-…`} style={{ textTransform: "uppercase" }} /></Field>
             <Field label="Size"><Input name="size" /></Field><Field label="Gemstone"><Input name="gemstone" /></Field>
             <Field label="Color"><Input name="color" /></Field><Field label="Style"><Input name="style" /></Field>
             <Field label="Barcode"><Input name="barcode" /></Field>
