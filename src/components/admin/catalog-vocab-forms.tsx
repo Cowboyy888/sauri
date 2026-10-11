@@ -18,11 +18,11 @@ function Vocab({ title, rows, addLabel, withPrefix, onAdd, onDelete, readOnly }:
   return (
     <div className="px-4 pb-4">
       <h3 className="mb-2 text-[13px] font-semibold">{title}</h3>
-      <ul className="divide-y divide-line-soft rounded-md border border-line">
-        {rows.length === 0 && <li className="px-3 py-2 text-[13px] text-muted">None yet.</li>}
+      <ul className="grid max-h-60 gap-px overflow-y-auto rounded-md border border-line bg-line-soft sm:grid-cols-2">
+        {rows.length === 0 && <li className="bg-surface px-3 py-2 text-[13px] text-muted sm:col-span-2">None yet.</li>}
         {rows.map((r) => (
-          <li key={r.id} className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]">
-            <span className="min-w-0"><span className="font-medium">{r.name}</span> <span className="text-xs text-muted">{r.meta} · {r.inUse} {r.inUseLabel}</span></span>
+          <li key={r.id} className="flex items-center justify-between gap-3 bg-surface px-3 py-2 text-[13px]">
+            <span className="min-w-0"><span className="block truncate font-medium">{r.name}</span><span className="block truncate text-xs text-muted">{r.meta} · {r.inUse} {r.inUseLabel}</span></span>
             {!readOnly && (
               <Button size="sm" variant="danger" disabled={pending} aria-label={`Delete ${r.name}`}
                 onClick={() => { if (!confirm(`Delete “${r.name}”?`)) return; start(async () => { const x = await onDelete(r.id); if (x.ok) toast(x.message ?? "Deleted"); else toast(x.error, false); }); }}>

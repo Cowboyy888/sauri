@@ -8,6 +8,7 @@ import { useCart } from "@/components/storefront/cart/cart-provider";
 import { BRAND } from "@/lib/storefront/brand";
 import type { CategorySummary, MaterialOption } from "@/lib/storefront/catalog";
 
+const INLINE_CATEGORIES = 4; // the rest are reachable from the Jewelry menu, so the bar never overflows
 const CATEGORY_LABELS: Record<string, string> = { rings: "Rings", earrings: "Earrings", necklaces: "Necklaces", bracelets: "Bracelets" };
 
 export function Header({ categories, materials }: { categories: CategorySummary[]; materials: MaterialOption[] }) {
@@ -26,7 +27,7 @@ export function Header({ categories, materials }: { categories: CategorySummary[
         <nav className="relative hidden items-center gap-7 lg:flex" aria-label="Primary">
           <Link href="/collections/new-arrivals" className="font-sans text-[13px] uppercase tracking-[0.14em] text-ink/80 hover:text-ink">New</Link>
           <MegaMenu categories={ordered} materials={materials} />
-          {ordered.map((c) => (
+          {ordered.slice(0, INLINE_CATEGORIES).map((c) => (
             <Link key={c.slug} href={`/collections/${c.slug}`} className="font-sans text-[13px] uppercase tracking-[0.14em] text-ink/80 hover:text-ink">{CATEGORY_LABELS[c.slug] ?? c.name}</Link>
           ))}
           <Link href="/collections/gifts" className="font-sans text-[13px] uppercase tracking-[0.14em] text-ink/80 hover:text-ink">Gifts</Link>

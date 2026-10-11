@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/storefront/brand";
 
 export const revalidate = 60;
 
+const HOME_CATEGORIES = 8; // two clean rows; the rest are one click away
 const CATEGORY_IMAGE: Record<string, string> = {
   rings: "/products/aurora-signet-ring-yg-front.svg",
   earrings: "/products/astra-diamond-studs-yg-front.svg",
@@ -52,17 +53,29 @@ export default async function HomePage() {
 
       <section className="shop-scroll-in mx-auto max-w-7xl px-4 py-14 sm:px-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {categories.map((c) => (
-            <Link key={c.slug} href={`/collections/${c.slug}`} className="group relative aspect-[3/4] overflow-hidden bg-beige-soft">
-              {CATEGORY_IMAGE[c.slug] && <Image src={CATEGORY_IMAGE[c.slug]!} alt={c.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition-transform duration-700 group-hover:scale-105" />}
-              <div className="absolute inset-0 bg-gradient-to-t from-ink/55 via-transparent to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-5">
-                <p className="font-display text-xl text-warm-white">{c.name}</p>
-                <p className="mt-1 font-sans text-xs uppercase tracking-widest text-warm-white/80 transition-transform duration-300 group-hover:translate-x-1">Shop Now →</p>
-              </div>
-            </Link>
-          ))}
+          {categories.slice(0, HOME_CATEGORIES).map((c) => {
+            const img = CATEGORY_IMAGE[c.slug];
+            return img ? (
+              <Link key={c.slug} href={`/collections/${c.slug}`} className="group relative aspect-[3/4] overflow-hidden bg-beige-soft">
+                <Image src={img} alt={c.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition-transform duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-ink/55 via-transparent to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  <p className="font-display text-xl text-warm-white">{c.name}</p>
+                  <p className="mt-1 font-sans text-xs uppercase tracking-widest text-warm-white/80 transition-transform duration-300 group-hover:translate-x-1">Shop Now →</p>
+                </div>
+              </Link>
+            ) : (
+              // Categories added in Settings have no photo yet: a quiet typographic tile instead of an empty box.
+              <Link key={c.slug} href={`/collections/${c.slug}`} className="group flex aspect-[3/4] flex-col items-center justify-center gap-2 border border-ink/10 bg-beige-soft p-5 text-center transition-colors hover:bg-beige">
+                <p className="font-display text-xl text-ink">{c.name}</p>
+                <p className="font-sans text-xs uppercase tracking-widest text-ink/60 transition-transform duration-300 group-hover:translate-x-1">Shop Now →</p>
+              </Link>
+            );
+          })}
         </div>
+        {categories.length > HOME_CATEGORIES && (
+          <p className="mt-6 text-center"><Link href="/collections" className="shop-link-line font-sans text-xs uppercase tracking-[0.14em] text-ink">View all categories →</Link></p>
+        )}
       </section>
 
       <ProductRail title="Best Sellers" viewAllHref="/collections/best-sellers" products={bestSellers} />

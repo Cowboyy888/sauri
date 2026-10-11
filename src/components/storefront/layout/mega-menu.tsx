@@ -12,6 +12,9 @@ const OCCASIONS = [
   { slug: "statement", name: "Statement" },
 ];
 
+const MAX_LISTED = 6;
+const linkCls = "font-sans text-sm text-ink/80 hover:text-ink";
+
 export function MegaMenu({ categories, materials }: { categories: CategorySummary[]; materials: MaterialOption[] }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,18 +48,19 @@ export function MegaMenu({ categories, materials }: { categories: CategorySummar
           <nav aria-label="Shop jewelry">
             <p className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Shop Jewelry</p>
             <ul className="mt-3 space-y-2.5">
-              {categories.map((c) => (
-                <li key={c.slug}><Link href={`/collections/${c.slug}`} className="font-sans text-sm text-ink/80 hover:text-ink">{c.name}</Link></li>
+              {categories.slice(0, MAX_LISTED).map((c) => (
+                <li key={c.slug}><Link href={`/collections/${c.slug}`} className={linkCls}>{c.name}</Link></li>
               ))}
-              <li><Link href="/collections" className="font-sans text-sm text-ink/80 hover:text-ink">All jewelry</Link></li>
+              <li><Link href="/collections" className={cn(linkCls, "text-ink underline-offset-4 hover:underline")}>{categories.length > MAX_LISTED ? `All ${categories.length} categories →` : "All jewelry"}</Link></li>
             </ul>
           </nav>
           <nav aria-label="Shop by material">
             <p className="font-sans text-[11px] uppercase tracking-[0.16em] text-ink/40">Shop by Material</p>
             <ul className="mt-3 space-y-2.5">
-              {materials.map((m) => (
-                <li key={m.slug}><Link href={`/collections/all-jewelry?material=${m.slug}`} className="font-sans text-sm text-ink/80 hover:text-ink">{m.name}</Link></li>
+              {materials.slice(0, MAX_LISTED).map((m) => (
+                <li key={m.slug}><Link href={`/collections/all-jewelry?material=${m.slug}`} className={linkCls}>{m.name}</Link></li>
               ))}
+              {materials.length > MAX_LISTED && <li><Link href="/collections/all-jewelry" className={cn(linkCls, "text-ink underline-offset-4 hover:underline")}>All materials →</Link></li>}
             </ul>
           </nav>
           <nav aria-label="Shop by occasion">
