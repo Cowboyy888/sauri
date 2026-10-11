@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Package, RotateCcw, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import { getDb } from "@/lib/db/client";
+import { getContent } from "@/lib/admin/misc";
 import { getBestSellers, getCategories, getNewArrivals } from "@/lib/storefront/catalog";
 import { ProductRail } from "@/components/storefront/shop/product-rail";
 import { BRAND } from "@/lib/storefront/brand";
@@ -33,7 +34,9 @@ const TRUST = [
 
 export default async function HomePage() {
   const db = getDb();
-  const [categories, bestSellers, newArrivals] = await Promise.all([getCategories(db), getBestSellers(db, 8), getNewArrivals(db, 8)]);
+  const [categories, bestSellers, newArrivals, content] = await Promise.all([getCategories(db), getBestSellers(db, 8), getNewArrivals(db, 8), getContent(db)]);
+  const heroTitle = content.heroTitle || BRAND.tagline;
+  const heroLede = content.heroLede || "Thoughtfully designed pieces made to become part of your everyday story.";
 
   return (
     <>
@@ -42,8 +45,8 @@ export default async function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/10 to-transparent" />
         <div className="relative mx-auto w-full max-w-7xl px-6 pb-16 text-warm-white sm:pb-20">
           <p className="shop-reveal font-sans text-xs uppercase tracking-[0.3em] text-warm-white/70">{BRAND.name}</p>
-          <h1 className="shop-reveal shop-delay-1 mt-4 max-w-2xl font-display text-4xl leading-[1.08] sm:text-6xl">Jewelry for every moment</h1>
-          <p className="shop-reveal shop-delay-2 mt-5 max-w-md font-sans text-[15px] text-warm-white/85">Thoughtfully designed pieces made to become part of your everyday story.</p>
+          <h1 className="shop-reveal shop-delay-1 mt-4 max-w-2xl font-display text-4xl leading-[1.08] sm:text-6xl">{heroTitle}</h1>
+          <p className="shop-reveal shop-delay-2 mt-5 max-w-md font-sans text-[15px] text-warm-white/85">{heroLede}</p>
           <div className="shop-reveal shop-delay-3 mt-8 flex flex-wrap gap-3">
             <Link href="/collections/new-arrivals" className="shop-press bg-warm-white px-6 py-3 font-sans text-xs uppercase tracking-[0.14em] text-ink hover:bg-warm-white/90">Shop New Arrivals</Link>
             <Link href="/collections/best-sellers" className="shop-press border border-warm-white/70 px-6 py-3 font-sans text-xs uppercase tracking-[0.14em] text-warm-white hover:border-warm-white">Explore Best Sellers</Link>

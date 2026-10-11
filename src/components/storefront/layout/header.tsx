@@ -11,15 +11,17 @@ import type { CategorySummary, MaterialOption } from "@/lib/storefront/catalog";
 const INLINE_CATEGORIES = 4; // the rest are reachable from the Jewelry menu, so the bar never overflows
 const CATEGORY_LABELS: Record<string, string> = { rings: "Rings", earrings: "Earrings", necklaces: "Necklaces", bracelets: "Bracelets" };
 
-export function Header({ categories, materials }: { categories: CategorySummary[]; materials: MaterialOption[] }) {
+export function Header({ categories, materials, announce }: { categories: CategorySummary[]; materials: MaterialOption[]; announce: string }) {
   const { count, open } = useCart();
   const ordered = [...categories].sort((a, b) => (CATEGORY_LABELS[a.slug] ?? a.name).localeCompare(CATEGORY_LABELS[b.slug] ?? b.name));
 
   return (
     <header className="sticky top-0 z-30 border-b border-ink/10 bg-warm-white/95 backdrop-blur">
-      <div className="bg-ink py-2 text-center font-sans text-[11px] uppercase tracking-[0.14em] text-warm-white">
-        {BRAND.announce}
-      </div>
+      {announce && (
+        <div className="bg-ink py-2 text-center font-sans text-[11px] uppercase tracking-[0.14em] text-warm-white">
+          {announce}
+        </div>
+      )}
       <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-1 lg:hidden">
           <MobileNav categories={categories} />

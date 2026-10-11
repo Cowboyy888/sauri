@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db/client";
 import { getCategories, getMaterialOptions } from "@/lib/storefront/catalog";
+import { getContent } from "@/lib/admin/misc";
 import { CartProvider } from "@/components/storefront/cart/cart-provider";
 import { CartDrawer } from "@/components/storefront/cart/cart-drawer";
 import { WishlistProvider } from "@/components/storefront/wishlist/wishlist-provider";
@@ -9,13 +10,13 @@ import { AttributionCapture } from "@/components/storefront/attribution-capture"
 import { AnalyticsCapture } from "@/components/storefront/analytics-capture";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
-  const [categories, materials] = await Promise.all([getCategories(getDb()), getMaterialOptions(getDb())]);
+  const [categories, materials, content] = await Promise.all([getCategories(getDb()), getMaterialOptions(getDb()), getContent(getDb())]);
   return (
     <CartProvider>
       <WishlistProvider>
         <AttributionCapture />
         <AnalyticsCapture />
-        <Header categories={categories} materials={materials} />
+        <Header categories={categories} materials={materials} announce={content.announce} />
         <main>{children}</main>
         <Footer />
         <CartDrawer />

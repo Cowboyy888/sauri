@@ -314,7 +314,9 @@ export async function setReviewStatusAction(id: string, status: "published" | "r
   return act("reviews:write", async (actor) => { await moderateReview(getDb(), actor, uuid.parse(id), next, note); }, ReviewLabel[next]);
 }
 const Content = z.object({ announce: z.string().max(120), heroTitle: z.string().max(60), heroLede: z.string().max(300) });
-export async function updateContentAction(input: z.input<typeof Content>) { return act("content:write", async (actor) => { await updateContent(getDb(), actor, Content.parse(input)); }, "Content published"); }
+export async function updateContentAction(input: z.input<typeof Content>) {
+  return act("content:write", async (actor) => { await updateContent(getDb(), actor, Content.parse(input)); revalidatePath("/", "layout"); }, "Content published");
+}
 const Disc = z.object({ code: z.string().trim().min(3).max(20), type: z.enum(["percent", "fixed", "free_shipping"]), value: z.coerce.number().min(0).max(100_000), categoryId: z.union([z.literal(""), uuid]).optional(), minSubtotal: optDollars("Minimum order"), maxDiscount: optDollars("Maximum discount"), startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), endsAt: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(), usageLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional(), perCustomerLimit: z.union([z.literal(""), z.coerce.number().int().min(1)]).optional() });
 export async function createDiscountAction(input: z.input<typeof Disc>) {
   return act("discounts:write", async (actor) => {
