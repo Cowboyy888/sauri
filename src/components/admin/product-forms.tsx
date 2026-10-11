@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Archive, ArchiveRestore, Copy, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
 import {
   addImageAction, addVariantAction, archiveProductAction, createProductAction, deleteProductAction, duplicateProductAction, removeImageAction, updateProductAction, updateVariantAction,
@@ -12,6 +12,10 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "../ui/m
 import { useMounted } from "../ui/use-mounted";
 import { toast } from "./toast";
 import { Thumb } from "./thumb";
+import { uploadProductImages } from "@/lib/supabase/upload-images";
+
+const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
+const filesOf = (fd: FormData, k: string) => fd.getAll(k).filter((f): f is File => f instanceof File && f.size > 0);
 
 
 type Opt = { id: string; name: string };
@@ -31,12 +35,15 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
   return (
     <form className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]" action={(fd) => start(async () => {
       setErr(null);
+      let uploaded: string[] = [];
+      try { const files = filesOf(fd, "images"); if (files.length) uploaded = await uploadProductImages(files, `new/${crypto.randomUUID()}`); }
+      catch (e) { setErr(e instanceof Error ? e.message : "Image upload failed."); return; }
       const r = await createProductAction({
         name: s(fd, "name"), slug: slugTouched ? slug : auto, shortDescription: s(fd, "shortDescription"), description: s(fd, "description"), categoryId: s(fd, "categoryId"), collectionId: s(fd, "collectionId"),
         status: s(fd, "status") as "draft", featured: fd.get("featured") === "on", bestSeller: fd.get("bestSeller") === "on", newArrival: fd.get("newArrival") === "on",
         material: s(fd, "material") as "yg", color: s(fd, "color"), size: s(fd, "size"), gemstone: s(fd, "gemstone"), sku: s(fd, "sku"), barcode: s(fd, "barcode"),
         costPrice: s(fd, "costPrice"), sellingPrice: s(fd, "sellingPrice"), compareAtPrice: s(fd, "compareAtPrice"), weightGrams: s(fd, "weight"), reorderLevel: s(fd, "reorderLevel") || "5",
-        seoTitle: s(fd, "seoTitle"), seoDescription: s(fd, "seoDescription"), tags: s(fd, "tags"), imageUrls: s(fd, "imageUrls"),
+        seoTitle: s(fd, "seoTitle"), seoDescription: s(fd, "seoDescription"), tags: s(fd, "tags"), imageUrls: uploaded.join("\n"),
       } as never);
       if (r.ok) { toast("Product created"); router.push(`/admin/products/${(r.data as { id: string }).id}?tab=inventory`); } else setErr(r.error);
     })}>
@@ -71,7 +78,7 @@ export function NewProductForm({ categories, collections }: { categories: Opt[];
         </section>
         <section className="grid grid-cols-1 gap-3.5 rounded-lg border border-line bg-surface p-4">
           <h2 className="text-[14px] font-semibold">Images and SEO</h2>
-          <Field label="Image URLs" hint="One per line. https:// (e.g. Supabase Storage) or /products/… The first is the main image."><Textarea name="imageUrls" rows={3} /></Field>
+          <Field label="Product images" hint="JPG, PNG, WebP or AVIF, up to 5 MB each. The first is the main image."><Input name="images" type="file" accept={IMAGE_ACCEPT} multiple className="h-auto py-1.5" /></Field>
           <Field label="SEO title" hint="Up to 70 characters. Defaults to “Name | SAURI”."><Input name="seoTitle" maxLength={70} /></Field>
           <Field label="SEO description" hint="Up to 160 characters."><Textarea name="seoDescription" rows={2} maxLength={160} /></Field>
           <Field label="Tags" hint="Comma-separated"><Input name="tags" placeholder="gold, everyday, gift" /></Field>
@@ -203,6 +210,7 @@ export function AddVariantForm({ productId, skuPrefix }: { productId: string; sk
 /* ---------------- images ---------------- */
 export function ImageManager({ productId, images, readOnly }: { productId: string; images: { id: string; url: string; alt: string }[]; readOnly: boolean }) {
   const [pending, start] = useTransition(), [err, setErr] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
     <div className="grid grid-cols-1 gap-4">
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -219,12 +227,22 @@ export function ImageManager({ productId, images, readOnly }: { productId: strin
         {!images.length && <li className="col-span-full rounded-lg border border-dashed border-line p-6 text-center text-[13px] text-muted">No images yet.</li>}
       </ul>
       {!readOnly && (
-        <form className="grid grid-cols-1 gap-3 rounded-lg border border-line bg-surface p-4 sm:grid-cols-[1fr_220px_auto] sm:items-end" action={(fd) => start(async () => {
-          setErr(null); const r = await addImageAction(productId, s(fd, "url"), s(fd, "alt")); if (r.ok) toast("Image added"); else setErr(r.error);
+        <form ref={formRef} className="grid grid-cols-1 gap-3 rounded-lg border border-line bg-surface p-4 sm:grid-cols-[1fr_220px_auto] sm:items-end" action={(fd) => start(async () => {
+          setErr(null);
+          const files = filesOf(fd, "images");
+          if (!files.length) { setErr("Choose at least one image."); return; }
+          let urls: string[];
+          try { urls = await uploadProductImages(files, productId); } catch (e) { setErr(e instanceof Error ? e.message : "Image upload failed."); return; }
+          for (const url of urls) {
+            const r = await addImageAction(productId, url, s(fd, "alt"));
+            if (!r.ok) { setErr(r.error); return; }
+          }
+          toast(urls.length === 1 ? "Image added" : `${urls.length} images added`);
+          formRef.current?.reset();
         })}>
-          <Field label="Image URL" hint="Upload to Supabase Storage and paste the public URL."><Input name="url" required placeholder="https://…" /></Field>
+          <Field label="Upload images" hint="JPG, PNG, WebP or AVIF, up to 5 MB each."><Input name="images" type="file" accept={IMAGE_ACCEPT} multiple required className="h-auto py-1.5" /></Field>
           <Field label="Alt text"><Input name="alt" placeholder="Describe the image" /></Field>
-          <Button disabled={pending}>Add image</Button>
+          <Button disabled={pending}>{pending ? "Uploading…" : "Upload"}</Button>
           <div className="sm:col-span-3"><Err e={err} /></div>
         </form>
       )}
