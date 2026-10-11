@@ -28,7 +28,7 @@ export default async function CollectionsIndex() {
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {categories.map((c) => (
           <Link key={c.slug} href={`/collections/${c.slug}`} className="group relative aspect-square overflow-hidden bg-beige-soft">
-            {CATEGORY_IMAGE[c.slug] && <Image src={CATEGORY_IMAGE[c.slug]!} alt={c.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition-transform duration-700 group-hover:scale-105" />}
+            {(c.imageUrl || CATEGORY_IMAGE[c.slug]) && <Image src={(c.imageUrl || CATEGORY_IMAGE[c.slug])!} alt={c.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition-transform duration-700 group-hover:scale-105" />}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/55 to-transparent p-4">
               <p className="font-display text-lg text-warm-white">{c.name}</p>
               <p className="font-sans text-xs text-warm-white/75">{c.count} {c.count === 1 ? "piece" : "pieces"}</p>

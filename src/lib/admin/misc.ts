@@ -95,11 +95,11 @@ export async function listStaff(db: DbOrTx) {
   return res.map((u) => ({ id: u.id!, name: u.name!, email: u.email!, role: u.role!, active: String(u.active) === "true", linked: !!u.auth_user_id, createdAt: new Date(u.created_at!) }));
 }
 
-export type StoreContent = { announce: string; heroTitle: string; heroLede: string };
+export type StoreContent = { announce: string; heroTitle: string; heroLede: string; heroImage: string };
 export async function getContent(db: DbOrTx): Promise<StoreContent> {
   const [row] = await db.select().from(settings).where(eq(settings.key, "content"));
   const v = (row?.value ?? {}) as Partial<StoreContent>;
-  return { announce: v.announce ?? "", heroTitle: v.heroTitle ?? "", heroLede: v.heroLede ?? "" };
+  return { announce: v.announce ?? "", heroTitle: v.heroTitle ?? "", heroLede: v.heroLede ?? "", heroImage: v.heroImage ?? "" };
 }
 
 export { orderBy };

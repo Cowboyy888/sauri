@@ -163,6 +163,7 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(),
   skuPrefix: text("sku_prefix").notNull(),
   position: integer("position").notNull().default(0),
+  imageUrl: text("image_url"), // storefront tile photo, uploaded from Settings
 });
 
 /** Controlled vocabulary for product_variants.material. `code` is what variants store (and the storefront filters on). */

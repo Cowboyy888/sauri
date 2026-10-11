@@ -204,15 +204,15 @@ export async function getMaterialOptions(db: DbOrTx): Promise<MaterialOption[]> 
   return rows;
 }
 
-export type CategorySummary = { slug: string; name: string; count: number };
+export type CategorySummary = { slug: string; name: string; count: number; imageUrl: string | null };
 export async function getCategories(db: DbOrTx): Promise<CategorySummary[]> {
   const rows = await db.select({
-    slug: categories.slug, name: categories.name, position: categories.position,
+    slug: categories.slug, name: categories.name, position: categories.position, imageUrl: categories.imageUrl,
     count: sql<number>`count(distinct ${products.id})::int`,
   }).from(categories)
     .leftJoin(products, and(eq(products.categoryId, categories.id), eq(products.status, "active")))
     .groupBy(categories.id).orderBy(asc(categories.position));
-  return rows.map(({ slug, name, count }) => ({ slug, name, count }));
+  return rows.map(({ slug, name, count, imageUrl }) => ({ slug, name, count, imageUrl }));
 }
 
 export type CollectionSummary = { slug: string; name: string; description: string; count: number };

@@ -41,7 +41,7 @@ export default async function HomePage() {
   return (
     <>
       <section className="relative flex h-[calc(100svh-88px)] min-h-[520px] items-end overflow-hidden bg-charcoal">
-        <Image src="/products/celeste-tennis-bracelet-yg-front.svg" alt="A hand wearing a solid gold tennis bracelet" fill priority sizes="100vw" className="shop-drift object-cover opacity-80" />
+        <Image src={content.heroImage || "/products/celeste-tennis-bracelet-yg-front.svg"} alt={content.heroImage ? "" : "A hand wearing a solid gold tennis bracelet"} fill priority sizes="100vw" className="shop-drift object-cover opacity-80" />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/10 to-transparent" />
         <div className="relative mx-auto w-full max-w-7xl px-6 pb-16 text-warm-white sm:pb-20">
           <p className="shop-reveal font-sans text-xs uppercase tracking-[0.3em] text-warm-white/70">{BRAND.name}</p>
@@ -57,7 +57,7 @@ export default async function HomePage() {
       <section className="shop-scroll-in mx-auto max-w-7xl px-4 py-14 sm:px-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {categories.slice(0, HOME_CATEGORIES).map((c) => {
-            const img = CATEGORY_IMAGE[c.slug];
+            const img = c.imageUrl || CATEGORY_IMAGE[c.slug];
             return img ? (
               <Link key={c.slug} href={`/collections/${c.slug}`} className="group relative aspect-[3/4] overflow-hidden bg-beige-soft">
                 <Image src={img} alt={c.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition-transform duration-700 group-hover:scale-105" />

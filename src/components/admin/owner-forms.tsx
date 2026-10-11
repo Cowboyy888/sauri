@@ -1,10 +1,11 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { addStaffAction, createDiscountAction, toggleDiscountAction, updateContentAction, updateStaffAction } from "@/app/admin/actions";
 import { Button } from "../ui/button";
 import { Field, Input, Select, Textarea } from "../ui/field";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { toast } from "./toast";
+import { uploadProductImages } from "@/lib/supabase/upload-images";
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 const Err = ({ e }: { e: string | null }) => (e ? <p role="alert" className="rounded-md bg-[#f8e9e6] px-3 py-2 text-[13px] text-neg">{e}</p> : null);
@@ -43,10 +44,32 @@ export function DiscountToggle({ id, active }: { id: string; active: boolean }) 
   return <Button size="sm" disabled={pending} onClick={() => start(async () => { const r = await toggleDiscountAction(id, !active); if (r.ok) toast(r.message ?? "Saved"); else toast(r.error, false); })}>{active ? "Pause" : "Activate"}</Button>;
 }
 
-export function ContentForm({ v }: { v: { announce: string; heroTitle: string; heroLede: string } }) {
+export function ContentForm({ v }: { v: { announce: string; heroTitle: string; heroLede: string; heroImage: string } }) {
   const [err, setErr] = useState<string | null>(null), [pending, start] = useTransition();
+  const [heroImage, setHeroImage] = useState(v.heroImage), [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setErr(null); setUploading(true);
+    try { const [url] = await uploadProductImages([file], "site/hero"); if (url) setHeroImage(url); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
   return (
-    <form className="grid max-w-2xl gap-3.5" action={(fd) => start(async () => { setErr(null); const r = await updateContentAction({ announce: s(fd, "announce"), heroTitle: s(fd, "heroTitle"), heroLede: s(fd, "heroLede") }); if (r.ok) toast("Published to the storefront"); else setErr(r.error); })}>
+    <form className="grid max-w-2xl gap-3.5" action={(fd) => start(async () => { setErr(null); const r = await updateContentAction({ announce: s(fd, "announce"), heroTitle: s(fd, "heroTitle"), heroLede: s(fd, "heroLede"), heroImage }); if (r.ok) toast("Published to the storefront"); else setErr(r.error); })}>
+      <div className="grid gap-2">
+        <span className="text-[13px] font-medium">Homepage hero photo</span>
+        <div className="relative aspect-[16/7] w-full overflow-hidden rounded-md border border-line bg-canvas">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {heroImage ? <img src={heroImage} alt="Hero preview" className="h-full w-full object-cover" /> : <span className="absolute inset-0 grid place-items-center px-4 text-center text-xs text-muted">Using the default photo. Upload one to replace it.</span>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" id="hero-photo" onChange={(e) => pick(e.target.files?.[0])} />
+          <Button type="button" variant="secondary" disabled={uploading || pending} onClick={() => fileRef.current?.click()}>{uploading ? "Uploading…" : heroImage ? "Replace photo" : "Upload photo"}</Button>
+          {heroImage && <Button type="button" variant="ghost" disabled={uploading || pending} onClick={() => setHeroImage("")}>Use default</Button>}
+          <span className="text-xs text-muted">Wide landscape works best (about 2400×1200). JPG, PNG, WebP or AVIF, up to 5 MB. Shown after you publish.</span>
+        </div>
+      </div>
       <Field label="Announcement bar" hint="Up to 120 characters"><Input name="announce" defaultValue={v.announce} maxLength={120} /></Field>
       <Field label="Homepage headline" hint="Up to 60 characters"><Input name="heroTitle" defaultValue={v.heroTitle} maxLength={60} /></Field>
       <Field label="Homepage introduction" hint="Up to 300 characters"><Textarea name="heroLede" rows={3} defaultValue={v.heroLede} maxLength={300} /></Field>

@@ -35,7 +35,7 @@ import { receivePurchaseOrder, type ReceiveLine } from "@/lib/purchasing/receivi
 import { startStocktake, recordCount, completeStocktake, cancelStocktake, setStocktakeSettings } from "@/lib/purchasing/stocktake";
 import { bulkSetProductStatus, bulkSetCategory, bulkSetCollection, bulkSetReorderLevel } from "@/lib/catalog/service";
 import { applyProductImport, validateImport, type ImportPreview } from "@/lib/catalog/import";
-import { createCategory, createMaterial, deleteCategory, deleteMaterial } from "@/lib/catalog/taxonomy";
+import { createCategory, createMaterial, deleteCategory, deleteMaterial, setCategoryImage } from "@/lib/catalog/taxonomy";
 import { materials as materialsTable } from "@/lib/db/schema";
 import { setStoreSettings } from "@/lib/admin/store-settings";
 import { setTargetStockLevel } from "@/lib/admin/purchasing";
@@ -313,7 +313,7 @@ export async function setReviewStatusAction(id: string, status: "published" | "r
   const next = z.enum(["published", "rejected", "hidden"]).parse(status);
   return act("reviews:write", async (actor) => { await moderateReview(getDb(), actor, uuid.parse(id), next, note); }, ReviewLabel[next]);
 }
-const Content = z.object({ announce: z.string().max(120), heroTitle: z.string().max(60), heroLede: z.string().max(300) });
+const Content = z.object({ announce: z.string().max(120), heroTitle: z.string().max(60), heroLede: z.string().max(300), heroImage: z.string().max(500).optional() });
 export async function updateContentAction(input: z.input<typeof Content>) {
   return act("content:write", async (actor) => { await updateContent(getDb(), actor, Content.parse(input)); revalidatePath("/", "layout"); }, "Content published");
 }
@@ -575,6 +575,9 @@ export async function devSignInAction(email: string, next?: string) {
 const NewCategory = z.object({ name: z.string().trim().min(1, "Enter a category name.").max(60), skuPrefix: z.string().trim().max(4).optional() });
 export async function createCategoryAction(input: z.input<typeof NewCategory>) {
   return act("settings:write", async (actor) => { const v = NewCategory.parse(input); await createCategory(getDb(), actor, v); }, "Category added");
+}
+export async function setCategoryImageAction(id: string, url: string | null) {
+  return act("settings:write", async (actor) => { await setCategoryImage(getDb(), actor, uuid.parse(id), url === null ? null : z.string().max(500).parse(url)); revalidatePath("/", "layout"); }, url ? "Category photo saved" : "Category photo removed");
 }
 export async function deleteCategoryAction(id: string) {
   return act("settings:write", async (actor) => { await deleteCategory(getDb(), actor, uuid.parse(id)); }, "Category deleted");

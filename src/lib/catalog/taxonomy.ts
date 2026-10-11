@@ -12,7 +12,7 @@ import { audit } from "../audit";
 const slug = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export async function listCategoriesWithCounts(db: Db) {
-  return db.select({ id: categories.id, name: categories.name, slug: categories.slug, skuPrefix: categories.skuPrefix, products: count(products.id) })
+  return db.select({ id: categories.id, name: categories.name, slug: categories.slug, skuPrefix: categories.skuPrefix, imageUrl: categories.imageUrl, products: count(products.id) })
     .from(categories).leftJoin(products, eq(products.categoryId, categories.id)).groupBy(categories.id).orderBy(asc(categories.position), asc(categories.name));
 }
 
@@ -35,6 +35,18 @@ export async function createCategory(db: Db, actor: Actor, input: { name: string
     const [row] = await tx.insert(categories).values({ slug: s, name, skuPrefix, position: Number(maxRow?.max ?? -1) + 1 }).returning();
     await audit(tx, actor, "Created category", "category", row!.id, undefined, { name, skuPrefix });
     return row!;
+  });
+}
+
+/** Sets (or clears, with null) the photo shown on the storefront's category tile. */
+export async function setCategoryImage(db: Db, actor: Actor, id: string, url: string | null) {
+  assertCan(actor, "settings:write");
+  if (url !== null && !/^https:\/\/\S{1,480}$/.test(url)) throw new ValidationError("Invalid image address.");
+  return db.transaction(async (tx) => {
+    const [cat] = await tx.select().from(categories).where(eq(categories.id, id));
+    if (!cat) throw new ValidationError("Category not found.");
+    await tx.update(categories).set({ imageUrl: url }).where(eq(categories.id, id));
+    await audit(tx, actor, url ? "Set category photo" : "Removed category photo", "category", id, { imageUrl: cat.imageUrl }, { imageUrl: url });
   });
 }
 

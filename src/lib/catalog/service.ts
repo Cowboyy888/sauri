@@ -258,9 +258,11 @@ export async function removeProductImage(db: Db, actor: Actor, imageId: string) 
 }
 
 
-export async function updateContent(db: Db, actor: Actor, v: { announce: string; heroTitle: string; heroLede: string }) {
+export async function updateContent(db: Db, actor: Actor, v: { announce: string; heroTitle: string; heroLede: string; heroImage?: string }) {
   assertCan(actor, "content:write");
-  const next = { announce: v.announce.trim().slice(0, 120), heroTitle: v.heroTitle.trim().slice(0, 60) || "Jewelry for every moment", heroLede: v.heroLede.trim().slice(0, 300) };
+  const heroImage = (v.heroImage ?? "").trim();
+  if (heroImage && !/^https:\/\/\S{1,480}$/.test(heroImage)) throw new ValidationError("Invalid hero image address.");
+  const next = { announce: v.announce.trim().slice(0, 120), heroTitle: v.heroTitle.trim().slice(0, 60) || "Jewelry for every moment", heroLede: v.heroLede.trim().slice(0, 300), heroImage };
   const [before] = await db.select().from(settings).where(eq(settings.key, "content"));
   await db.insert(settings).values({ key: "content", value: next }).onConflictDoUpdate({ target: settings.key, set: { value: next } });
   await audit(db, actor, "Edited content", "settings", "content", before?.value ?? null, next);

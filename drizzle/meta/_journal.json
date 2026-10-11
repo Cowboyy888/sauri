@@ -141,6 +141,13 @@
       "when": 1791732655306,
       "tag": "0020_materials",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791734116756,
+      "tag": "0021_category_image",
+      "breakpoints": true
     }
   ]
 }
